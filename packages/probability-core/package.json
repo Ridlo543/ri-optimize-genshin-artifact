@@ -1,0 +1,24 @@
+{
+  "name": "@ri-genshin/probability-core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "pnpm --filter @ri-genshin/artifact-schema build && tsc -p tsconfig.json",
+    "test": "pnpm --filter @ri-genshin/artifact-schema build && vitest run"
+  },
+  "dependencies": {
+    "@ri-genshin/artifact-schema": "workspace:*"
+  },
+  "devDependencies": {
+    "vitest": "^2.1.8"
+  }
+}
