@@ -38,6 +38,23 @@ export const ARTIFACT_PIECE_TO_GOOD_SLOT: Record<ArtifactPiece, string> = Object
   Object.entries(GOOD_SLOT_TO_ARTIFACT_PIECE).map(([slot, piece]) => [piece, slot])
 ) as Record<ArtifactPiece, string>;
 
+export interface GoodImportPayload {
+  artifacts?: GoodArtifact[];
+  artifact?: GoodArtifact;
+  samples?: Array<{ artifact?: GoodArtifact }>;
+}
+
+export interface GoodNormalizationWarning {
+  code: string;
+  message: string;
+}
+
+export interface GoodArtifactNormalizationResult {
+  artifact: GoodArtifact | null;
+  warnings: GoodNormalizationWarning[];
+  skipReason?: string;
+}
+
 export function mapGoodStatKey(key: string): StatType {
   const stat = GOOD_STAT_TO_STAT_TYPE[key];
   if (!stat) {
@@ -54,7 +71,79 @@ export function mapGoodSlotKey(key: string): ArtifactPiece {
   return piece;
 }
 
+export function isArtifactLevel(level: number): level is ArtifactLevel {
+  return Number.isInteger(level) && level >= 0 && level <= 20;
+}
+
+export function extractGoodArtifacts(payload: unknown): GoodArtifact[] {
+  if (Array.isArray(payload)) {
+    return payload.filter(isGoodArtifactLike);
+  }
+
+  if (!isRecord(payload)) {
+    return [];
+  }
+
+  if (Array.isArray(payload.artifacts)) {
+    return payload.artifacts.filter(isGoodArtifactLike);
+  }
+
+  if (Array.isArray(payload.samples)) {
+    return payload.samples
+      .map((sample) => (isRecord(sample) ? sample.artifact : undefined))
+      .filter(isGoodArtifactLike);
+  }
+
+  if (isGoodArtifactLike(payload.artifact)) {
+    return [payload.artifact];
+  }
+
+  if (isGoodArtifactLike(payload)) {
+    return [payload];
+  }
+
+  return [];
+}
+
+export function normalizeGoodArtifact(good: GoodArtifact): GoodArtifactNormalizationResult {
+  const warnings: GoodNormalizationWarning[] = [];
+
+  if (!isArtifactLevel(good.level)) {
+    return {
+      artifact: null,
+      warnings,
+      skipReason: `Artifact level ${good.level} is outside supported range 0..20.`
+    };
+  }
+
+  const substats = filterSubstats(good.substats ?? [], "substats", warnings);
+  const unactivatedSubstats = filterSubstats(good.unactivatedSubstats ?? [], "unactivatedSubstats", warnings);
+
+  if (unactivatedSubstats.length > 1) {
+    return {
+      artifact: null,
+      warnings,
+      skipReason: "Multiple real unactivated substats are not supported."
+    };
+  }
+
+  const normalized: GoodArtifact = {
+    ...good,
+    level: good.level,
+    substats,
+    unactivatedSubstats
+  };
+
+  return { artifact: normalized, warnings };
+}
+
 export function goodArtifactToArtifactInput(good: GoodArtifact): ArtifactInput {
+  const normalized = normalizeGoodArtifact(good);
+  if (!normalized.artifact) {
+    throw new Error(normalized.skipReason ?? "Unable to normalize GOOD artifact.");
+  }
+
+  good = normalized.artifact;
   const rarity = good.rarity as ArtifactRarity;
   const level = good.level as ArtifactLevel;
   const activeSubstats = good.substats.map((substat) => goodSubstatToInput(substat, true));
@@ -81,6 +170,30 @@ export function goodArtifactToArtifactInput(good: GoodArtifact): ArtifactInput {
   return artifact;
 }
 
+function filterSubstats(
+  substats: GoodSubstat[],
+  fieldName: "substats" | "unactivatedSubstats",
+  warnings: GoodNormalizationWarning[]
+): GoodSubstat[] {
+  const filtered: GoodSubstat[] = [];
+
+  substats.forEach((substat, index) => {
+    const key = substat.key.trim();
+    const value = substat.value;
+    if (key.length === 0 || !Number.isFinite(value) || value <= 0) {
+      warnings.push({
+        code: "dropped-placeholder-substat",
+        message: `Dropped ${fieldName}[${index}] because it has an empty key or invalid value.`
+      });
+      return;
+    }
+
+    filtered.push({ key, value });
+  });
+
+  return filtered;
+}
+
 function goodSubstatToInput(substat: GoodSubstat, active: boolean) {
   return {
     stat: mapGoodStatKey(substat.key),
@@ -88,4 +201,19 @@ function goodSubstatToInput(substat: GoodSubstat, active: boolean) {
     active,
     source: active ? "VISIBLE" as const : "UNACTIVATED" as const
   };
+}
+
+function isGoodArtifactLike(value: unknown): value is GoodArtifact {
+  return (
+    isRecord(value) &&
+    typeof value.slotKey === "string" &&
+    typeof value.mainStatKey === "string" &&
+    typeof value.rarity === "number" &&
+    typeof value.level === "number" &&
+    Array.isArray(value.substats)
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }

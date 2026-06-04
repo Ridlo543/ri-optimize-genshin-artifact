@@ -28,7 +28,7 @@ export enum ArtifactPiece {
   CIRCLET = "CIRCLET"
 }
 
-export type ArtifactLevel = 0 | 4 | 8 | 12 | 16 | 20;
+export type ArtifactLevel = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20;
 export type ArtifactRarity = 3 | 4 | 5;
 
 export interface SubstatInput {
@@ -57,6 +57,7 @@ export interface GoodSubstat {
 }
 
 export interface GoodArtifact {
+  id?: string | number;
   setKey?: string;
   slotKey: string;
   rarity: number;
@@ -72,7 +73,11 @@ export interface ScanConfidence {
   setKey?: number;
   slotKey?: number;
   mainStatKey?: number;
+  level?: number;
   substats?: number;
+  lock?: number;
+  equipped?: number;
+  location?: number;
 }
 
 export interface ScannerCapture {

@@ -18,6 +18,10 @@ export function validateArtifact(artifact: ArtifactInput): ValidationResult {
     errors.push("MVP supports 5-star artifacts only.");
   }
 
+  if (!Number.isInteger(artifact.level) || artifact.level < 0 || artifact.level > 20) {
+    errors.push("Artifact level must be an integer from 0 to 20.");
+  }
+
   const seen = new Set<StatType>();
   for (const substat of artifact.substats) {
     if (!MINOR_STATS.includes(substat.stat)) {

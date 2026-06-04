@@ -1,10 +1,15 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { ArtifactInput, ArtifactPiece, StatType } from "@ri-genshin/artifact-schema";
-import { getAvailableMinorAffixes, getNewSubstatDistribution } from "./distribution";
+import { ArtifactInput, ArtifactPiece, extractGoodArtifacts, StatType } from "@ri-genshin/artifact-schema";
+import { evaluateGoodArtifactBatch } from "./batch";
+import { getAvailableMinorAffixes, getNewSubstatDistribution, getRemainingMilestones } from "./distribution";
 import { evaluateArtifactExact } from "./exact";
 import { GENERIC_DPS_CRIT_PROFILE } from "./profiles";
 import { calculateCV } from "./scoring";
 import { validateArtifact } from "./validation";
+
+const fixturePath = fileURLToPath(new URL("../../../data/fixtures/good/artifact-samples.json", import.meta.url));
 
 function baseArtifact(overrides: Partial<ArtifactInput> = {}): ArtifactInput {
   return {
@@ -106,5 +111,24 @@ describe("artifact probability core", () => {
     expect(result.probabilityByTargetRollCount[2]).toBeCloseTo(0.375, 8);
     expect(result.probabilityByTargetRollCount[3]).toBeCloseTo(0.25, 8);
     expect(result.probabilityByTargetRollCount[4]).toBeCloseTo(0.0625, 8);
+  });
+
+  it("calculates remaining milestones from non-milestone levels", () => {
+    expect(getRemainingMilestones(17)).toEqual([20]);
+    expect(getRemainingMilestones(9)).toEqual([12, 16, 20]);
+    expect(getRemainingMilestones(6)).toEqual([8, 12, 16, 20]);
+  });
+
+  it("evaluates supported GOOD fixture artifacts and reports skipped artifacts with reasons", () => {
+    const payload = JSON.parse(readFileSync(fixturePath, "utf8"));
+    const artifacts = extractGoodArtifacts(payload);
+    const batch = evaluateGoodArtifactBatch(artifacts, GENERIC_DPS_CRIT_PROFILE);
+
+    expect(batch.summary.total).toBe(10);
+    expect(batch.evaluated.length).toBeGreaterThan(0);
+    expect(batch.skipped.length).toBeGreaterThan(0);
+    expect(batch.summary.warningCount).toBeGreaterThan(0);
+    expect(batch.evaluated.some((item) => item.id === "artifact_2087")).toBe(true);
+    expect(batch.skipped.some((item) => item.reason.includes("MVP supports 5-star artifacts only"))).toBe(true);
   });
 });

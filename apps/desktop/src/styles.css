@@ -23,12 +23,14 @@ body {
 }
 
 button,
+label.file-button,
 select,
 textarea {
   font: inherit;
 }
 
 button,
+label.file-button,
 select {
   border: 1px solid rgba(255, 255, 255, 0.14);
   background: #292722;
@@ -37,16 +39,21 @@ select {
 }
 
 button {
+  cursor: pointer;
+}
+
+button,
+label.file-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 7px;
   border-radius: 6px;
   padding: 0 12px;
-  cursor: pointer;
 }
 
 button:hover,
+label.file-button:hover,
 select:hover {
   border-color: rgba(225, 182, 94, 0.7);
 }
@@ -110,6 +117,19 @@ button:disabled {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.file-button {
+  position: relative;
+  cursor: pointer;
+}
+
+.file-button input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .message {
@@ -210,10 +230,40 @@ h1 {
   font-size: 11px;
 }
 
+.batch-list {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.batch-list div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  min-height: 34px;
+  align-items: center;
+  border-radius: 6px;
+  padding: 7px;
+  background: #242e2a;
+}
+
+.batch-list span,
+.batch-list b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .explain {
   margin: 12px 0 0;
   padding-left: 18px;
   color: #dfd6c4;
+}
+
+.warnings {
+  margin: 12px 0 0;
+  padding-left: 18px;
+  color: #ffcf91;
 }
 
 select {

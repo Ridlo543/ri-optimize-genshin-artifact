@@ -58,7 +58,11 @@ importers:
         specifier: ^6.0.3
         version: 6.4.3(@types/node@22.19.19)
 
-  packages/artifact-schema: {}
+  packages/artifact-schema:
+    devDependencies:
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.19.19)
 
   packages/probability-core:
     dependencies:

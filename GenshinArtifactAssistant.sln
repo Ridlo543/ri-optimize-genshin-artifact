@@ -1,0 +1,60 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "apps", "apps", "{1787FE1D-075E-9E68-7218-25F1BD1BBEAB}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "scanner-win", "scanner-win", "{CDD96D84-BFFD-6D60-F5F1-471BD07ABD62}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GenshinArtifactScanner.Win", "apps\scanner-win\GenshinArtifactScanner.Win.csproj", "{5F5E5D0F-7B35-4300-96A1-A551FF18F523}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "scanner-win.Tests", "scanner-win.Tests", "{0ED58D15-A5EF-8B71-2E55-AF8CE5741505}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GenshinArtifactScanner.Win.Tests", "apps\scanner-win.Tests\GenshinArtifactScanner.Win.Tests.csproj", "{601693C4-15FA-4403-BF0D-F904227EB6B4}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
+		Release|Any CPU = Release|Any CPU
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{5F5E5D0F-7B35-4300-96A1-A551FF18F523}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5F5E5D0F-7B35-4300-96A1-A551FF18F523}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5F5E5D0F-7B35-4300-96A1-A551FF18F523}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{5F5E5D0F-7B35-4300-96A1-A551FF18F523}.Debug|x64.Build.0 = Debug|Any CPU
+		{5F5E5D0F-7B35-4300-96A1-A551FF18F523}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{5F5E5D0F-7B35-4300-96A1-A551FF18F523}.Debug|x86.Build.0 = Debug|Any CPU
+		{5F5E5D0F-7B35-4300-96A1-A551FF18F523}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5F5E5D0F-7B35-4300-96A1-A551FF18F523}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5F5E5D0F-7B35-4300-96A1-A551FF18F523}.Release|x64.ActiveCfg = Release|Any CPU
+		{5F5E5D0F-7B35-4300-96A1-A551FF18F523}.Release|x64.Build.0 = Release|Any CPU
+		{5F5E5D0F-7B35-4300-96A1-A551FF18F523}.Release|x86.ActiveCfg = Release|Any CPU
+		{5F5E5D0F-7B35-4300-96A1-A551FF18F523}.Release|x86.Build.0 = Release|Any CPU
+		{601693C4-15FA-4403-BF0D-F904227EB6B4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{601693C4-15FA-4403-BF0D-F904227EB6B4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{601693C4-15FA-4403-BF0D-F904227EB6B4}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{601693C4-15FA-4403-BF0D-F904227EB6B4}.Debug|x64.Build.0 = Debug|Any CPU
+		{601693C4-15FA-4403-BF0D-F904227EB6B4}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{601693C4-15FA-4403-BF0D-F904227EB6B4}.Debug|x86.Build.0 = Debug|Any CPU
+		{601693C4-15FA-4403-BF0D-F904227EB6B4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{601693C4-15FA-4403-BF0D-F904227EB6B4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{601693C4-15FA-4403-BF0D-F904227EB6B4}.Release|x64.ActiveCfg = Release|Any CPU
+		{601693C4-15FA-4403-BF0D-F904227EB6B4}.Release|x64.Build.0 = Release|Any CPU
+		{601693C4-15FA-4403-BF0D-F904227EB6B4}.Release|x86.ActiveCfg = Release|Any CPU
+		{601693C4-15FA-4403-BF0D-F904227EB6B4}.Release|x86.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{CDD96D84-BFFD-6D60-F5F1-471BD07ABD62} = {1787FE1D-075E-9E68-7218-25F1BD1BBEAB}
+		{5F5E5D0F-7B35-4300-96A1-A551FF18F523} = {CDD96D84-BFFD-6D60-F5F1-471BD07ABD62}
+		{0ED58D15-A5EF-8B71-2E55-AF8CE5741505} = {1787FE1D-075E-9E68-7218-25F1BD1BBEAB}
+		{601693C4-15FA-4403-BF0D-F904227EB6B4} = {0ED58D15-A5EF-8B71-2E55-AF8CE5741505}
+	EndGlobalSection
+EndGlobal

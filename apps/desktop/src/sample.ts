@@ -7,7 +7,11 @@ export const SAMPLE_SCAN_RESULT: ScannerArtifactResult = {
     setKey: 0.95,
     slotKey: 0.98,
     mainStatKey: 0.96,
-    substats: 0.94
+    level: 0.97,
+    substats: 0.94,
+    lock: 0.95,
+    equipped: 0.9,
+    location: 0.9
   },
   artifact: {
     setKey: "HuskOfOpulentDreams",

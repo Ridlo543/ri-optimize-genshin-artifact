@@ -8,4 +8,11 @@
     <AssemblyName>GenshinArtifactScanner.Win</AssemblyName>
     <RootNamespace>GenshinArtifactScanner.Win</RootNamespace>
   </PropertyGroup>
+  <ItemGroup>
+    <Content Include="tessdata\*.traineddata" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Tesseract" Version="5.2.0" />
+    <PackageReference Include="Tesseract.Drawing" Version="5.2.0" />
+  </ItemGroup>
 </Project>
