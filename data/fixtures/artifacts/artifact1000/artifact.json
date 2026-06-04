@@ -1,0 +1,30 @@
+{
+  "setKey": "LongNightsOath",
+  "slotKey": "plume",
+  "rarity": 5,
+  "mainStatKey": "atk",
+  "level": 0,
+  "substats": [
+    {
+      "key": "def",
+      "value": 23.0
+    },
+    {
+      "key": "hp",
+      "value": 299.0
+    },
+    {
+      "key": "critRate_",
+      "value": 3.5
+    }
+  ],
+  "unactivatedSubstats": [
+    {
+      "key": "atk_",
+      "value": 4.1
+    }
+  ],
+  "location": "",
+  "lock": true,
+  "id": 1000
+}

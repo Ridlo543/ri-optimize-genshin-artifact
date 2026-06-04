@@ -1,0 +1,29 @@
+{
+  "setKey": "LongNightsOath",
+  "slotKey": "circlet",
+  "rarity": 5,
+  "mainStatKey": "critRate_",
+  "level": 0,
+  "substats": [
+    {
+      "key": "atk_",
+      "value": 5.8
+    },
+    {
+      "key": "hp",
+      "value": 269.0
+    },
+    {
+      "key": "hp_",
+      "value": 5.3
+    },
+    {
+      "key": "critDMG_",
+      "value": 7.0
+    }
+  ],
+  "unactivatedSubstats": [],
+  "location": "",
+  "lock": true,
+  "id": 1035
+}

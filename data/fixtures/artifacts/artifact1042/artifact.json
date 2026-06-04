@@ -1,0 +1,30 @@
+{
+  "setKey": "LongNightsOath",
+  "slotKey": "circlet",
+  "rarity": 5,
+  "mainStatKey": "critDMG_",
+  "level": 0,
+  "substats": [
+    {
+      "key": "critRate_",
+      "value": 3.1
+    },
+    {
+      "key": "atk_",
+      "value": 4.1
+    },
+    {
+      "key": "atk",
+      "value": 19.0
+    }
+  ],
+  "unactivatedSubstats": [
+    {
+      "key": "hp_",
+      "value": 4.7
+    }
+  ],
+  "location": "Layla",
+  "lock": true,
+  "id": 1042
+}

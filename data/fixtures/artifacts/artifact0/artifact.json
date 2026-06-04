@@ -1,0 +1,29 @@
+{
+  "setKey": "CelestialGift",
+  "slotKey": "flower",
+  "rarity": 5,
+  "mainStatKey": "hp",
+  "level": 20,
+  "substats": [
+    {
+      "key": "critRate_",
+      "value": 10.5
+    },
+    {
+      "key": "enerRech_",
+      "value": 6.5
+    },
+    {
+      "key": "def",
+      "value": 23.0
+    },
+    {
+      "key": "hp_",
+      "value": 16.3
+    }
+  ],
+  "unactivatedSubstats": [],
+  "location": "",
+  "lock": true,
+  "id": 0
+}

@@ -1,0 +1,30 @@
+{
+  "setKey": "LongNightsOath",
+  "slotKey": "goblet",
+  "rarity": 5,
+  "mainStatKey": "cryo_dmg_",
+  "level": 0,
+  "substats": [
+    {
+      "key": "atk",
+      "value": 14.0
+    },
+    {
+      "key": "enerRech_",
+      "value": 4.5
+    },
+    {
+      "key": "critRate_",
+      "value": 3.1
+    }
+  ],
+  "unactivatedSubstats": [
+    {
+      "key": "critDMG_",
+      "value": 5.4
+    }
+  ],
+  "location": "",
+  "lock": true,
+  "id": 1027
+}

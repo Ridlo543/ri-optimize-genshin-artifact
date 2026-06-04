@@ -1,0 +1,450 @@
+{
+  "source": "data/example/Database_1_2026-06-04_18-43-27.json",
+  "format": "GOOD",
+  "dbVersion": 25,
+  "artifactCount": 1886,
+  "samples": [
+    {
+      "label": "plus20-normal",
+      "sourceDbIndex": 0,
+      "note": "First GOOD artifact: +20 5-star plume with four active substats.",
+      "artifact": {
+        "setKey": "NightOfTheSkysUnveiling",
+        "rarity": 5,
+        "level": 20,
+        "slotKey": "plume",
+        "mainStatKey": "atk",
+        "substats": [
+          {
+            "key": "critRate_",
+            "value": 10.1
+          },
+          {
+            "key": "hp",
+            "value": 478
+          },
+          {
+            "key": "atk_",
+            "value": 4.1
+          },
+          {
+            "key": "critDMG_",
+            "value": 11.7
+          }
+        ],
+        "location": "Yanfei",
+        "lock": true,
+        "unactivatedSubstats": [],
+        "id": "artifact_1441"
+      }
+    },
+    {
+      "label": "placeholder-unactivated",
+      "sourceDbIndex": 2,
+      "note": "GOOD export can include blank placeholder substats that must be filtered before mapping.",
+      "artifact": {
+        "setKey": "WanderersTroupe",
+        "rarity": 5,
+        "level": 0,
+        "slotKey": "plume",
+        "mainStatKey": "atk",
+        "substats": [
+          {
+            "key": "critRate_",
+            "value": 3.9
+          },
+          {
+            "key": "def",
+            "value": 23
+          },
+          {
+            "key": "critDMG_",
+            "value": 7
+          },
+          {
+            "key": "",
+            "value": 0
+          }
+        ],
+        "location": "",
+        "lock": true,
+        "unactivatedSubstats": [
+          {
+            "key": "hp",
+            "value": 209
+          },
+          {
+            "key": "",
+            "value": 0
+          },
+          {
+            "key": "",
+            "value": 0
+          },
+          {
+            "key": "",
+            "value": 0
+          }
+        ],
+        "id": "artifact_2087"
+      }
+    },
+    {
+      "label": "elemental-goblet-active",
+      "sourceDbIndex": 13,
+      "note": "Elemental goblet with all active known substats.",
+      "artifact": {
+        "setKey": "ObsidianCodex",
+        "rarity": 5,
+        "level": 0,
+        "slotKey": "goblet",
+        "mainStatKey": "electro_dmg_",
+        "substats": [
+          {
+            "key": "def",
+            "value": 19
+          },
+          {
+            "key": "hp_",
+            "value": 5.8
+          },
+          {
+            "key": "eleMas",
+            "value": 21
+          },
+          {
+            "key": "atk",
+            "value": 16
+          }
+        ],
+        "location": "",
+        "lock": false,
+        "unactivatedSubstats": [],
+        "id": "artifact_2558"
+      }
+    },
+    {
+      "label": "elemental-goblet-unactivated",
+      "sourceDbIndex": 56,
+      "note": "Elemental goblet with known unactivated substat.",
+      "artifact": {
+        "setKey": "MaidenBeloved",
+        "rarity": 5,
+        "level": 0,
+        "slotKey": "goblet",
+        "mainStatKey": "physical_dmg_",
+        "substats": [
+          {
+            "key": "eleMas",
+            "value": 23
+          },
+          {
+            "key": "def",
+            "value": 23
+          },
+          {
+            "key": "critRate_",
+            "value": 3.9
+          },
+          {
+            "key": "",
+            "value": 0
+          }
+        ],
+        "location": "",
+        "lock": false,
+        "unactivatedSubstats": [
+          {
+            "key": "critDMG_",
+            "value": 7.8
+          },
+          {
+            "key": "",
+            "value": 0
+          },
+          {
+            "key": "",
+            "value": 0
+          },
+          {
+            "key": "",
+            "value": 0
+          }
+        ],
+        "id": "artifact_2260"
+      }
+    },
+    {
+      "label": "crit-circlet",
+      "sourceDbIndex": 1,
+      "note": "Crit main-stat circlet import case.",
+      "artifact": {
+        "setKey": "AubadeOfMorningstarAndMoon",
+        "rarity": 5,
+        "level": 20,
+        "slotKey": "circlet",
+        "mainStatKey": "critDMG_",
+        "substats": [
+          {
+            "key": "atk",
+            "value": 62
+          },
+          {
+            "key": "def",
+            "value": 62
+          },
+          {
+            "key": "critRate_",
+            "value": 2.7
+          },
+          {
+            "key": "atk_",
+            "value": 5.8
+          }
+        ],
+        "location": "",
+        "lock": true,
+        "unactivatedSubstats": [],
+        "id": "artifact_868"
+      }
+    },
+    {
+      "label": "er-sands-unactivated",
+      "sourceDbIndex": 266,
+      "note": "ER sands with unactivated target stat.",
+      "artifact": {
+        "setKey": "AubadeOfMorningstarAndMoon",
+        "rarity": 5,
+        "level": 0,
+        "slotKey": "sands",
+        "mainStatKey": "enerRech_",
+        "substats": [
+          {
+            "key": "hp",
+            "value": 269
+          },
+          {
+            "key": "def",
+            "value": 21
+          },
+          {
+            "key": "critDMG_",
+            "value": 6.2
+          },
+          {
+            "key": "",
+            "value": 0
+          }
+        ],
+        "location": "",
+        "lock": true,
+        "unactivatedSubstats": [
+          {
+            "key": "atk_",
+            "value": 5.3
+          },
+          {
+            "key": "",
+            "value": 0
+          },
+          {
+            "key": "",
+            "value": 0
+          },
+          {
+            "key": "",
+            "value": 0
+          }
+        ],
+        "id": "artifact_784"
+      }
+    },
+    {
+      "label": "four-star-edge",
+      "sourceDbIndex": 20,
+      "note": "4-star artifact is out of MVP probability scope but useful for importer behavior.",
+      "artifact": {
+        "setKey": "GladiatorsFinale",
+        "rarity": 4,
+        "level": 0,
+        "slotKey": "sands",
+        "mainStatKey": "hp_",
+        "substats": [
+          {
+            "key": "atk",
+            "value": 16
+          },
+          {
+            "key": "enerRech_",
+            "value": 3.6
+          },
+          {
+            "key": "",
+            "value": 0
+          },
+          {
+            "key": "",
+            "value": 0
+          }
+        ],
+        "location": "",
+        "lock": false,
+        "unactivatedSubstats": [
+          {
+            "key": "",
+            "value": 0
+          },
+          {
+            "key": "",
+            "value": 0
+          },
+          {
+            "key": "",
+            "value": 0
+          },
+          {
+            "key": "",
+            "value": 0
+          }
+        ],
+        "id": "artifact_2641"
+      }
+    },
+    {
+      "label": "unlocked-artifact",
+      "sourceDbIndex": 7,
+      "note": "Unlocked artifact for UI/scanner lock handling.",
+      "artifact": {
+        "setKey": "ADayCarvedFromRisingWinds",
+        "rarity": 5,
+        "level": 0,
+        "slotKey": "sands",
+        "mainStatKey": "eleMas",
+        "substats": [
+          {
+            "key": "hp",
+            "value": 239
+          },
+          {
+            "key": "atk",
+            "value": 16
+          },
+          {
+            "key": "critDMG_",
+            "value": 6.2
+          },
+          {
+            "key": "",
+            "value": 0
+          }
+        ],
+        "location": "",
+        "lock": false,
+        "unactivatedSubstats": [
+          {
+            "key": "hp_",
+            "value": 5.3
+          },
+          {
+            "key": "",
+            "value": 0
+          },
+          {
+            "key": "",
+            "value": 0
+          },
+          {
+            "key": "",
+            "value": 0
+          }
+        ],
+        "id": "artifact_2406"
+      }
+    },
+    {
+      "label": "equipped-unactivated",
+      "sourceDbIndex": 283,
+      "note": "Equipped artifact with unactivated substat.",
+      "artifact": {
+        "setKey": "WanderersTroupe",
+        "rarity": 5,
+        "level": 0,
+        "slotKey": "plume",
+        "mainStatKey": "atk",
+        "substats": [
+          {
+            "key": "eleMas",
+            "value": 21
+          },
+          {
+            "key": "atk_",
+            "value": 4.1
+          },
+          {
+            "key": "critRate_",
+            "value": 3.9
+          },
+          {
+            "key": "",
+            "value": 0
+          }
+        ],
+        "location": "Kirara",
+        "lock": true,
+        "unactivatedSubstats": [
+          {
+            "key": "hp_",
+            "value": 4.1
+          },
+          {
+            "key": "",
+            "value": 0
+          },
+          {
+            "key": "",
+            "value": 0
+          },
+          {
+            "key": "",
+            "value": 0
+          }
+        ],
+        "id": "artifact_2095"
+      }
+    },
+    {
+      "label": "odd-level",
+      "sourceDbIndex": 163,
+      "note": "GOOD exports can include non-milestone levels that the MVP evaluator must normalize or reject intentionally.",
+      "artifact": {
+        "setKey": "Instructor",
+        "rarity": 4,
+        "level": 10,
+        "slotKey": "plume",
+        "mainStatKey": "atk",
+        "substats": [
+          {
+            "key": "def_",
+            "value": 5.8
+          },
+          {
+            "key": "critRate_",
+            "value": 3.1
+          },
+          {
+            "key": "eleMas",
+            "value": 19
+          },
+          {
+            "key": "atk_",
+            "value": 3.7
+          }
+        ],
+        "location": "",
+        "lock": true,
+        "unactivatedSubstats": [],
+        "id": "artifact_488"
+      }
+    }
+  ]
+}

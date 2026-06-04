@@ -1,0 +1,25 @@
+{
+  "setKey": "FragmentOfHarmonicWhimsy",
+  "slotKey": "goblet",
+  "rarity": 4,
+  "mainStatKey": "electro_dmg_",
+  "level": 0,
+  "substats": [
+    {
+      "key": "critDMG_",
+      "value": 5.6
+    },
+    {
+      "key": "critRate_",
+      "value": 2.8
+    },
+    {
+      "key": "atk",
+      "value": 16.0
+    }
+  ],
+  "unactivatedSubstats": [],
+  "location": "",
+  "lock": true,
+  "id": 1743
+}

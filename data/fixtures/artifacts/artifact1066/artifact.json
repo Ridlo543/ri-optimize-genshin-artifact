@@ -1,0 +1,30 @@
+{
+  "setKey": "ObsidianCodex",
+  "slotKey": "sands",
+  "rarity": 5,
+  "mainStatKey": "enerRech_",
+  "level": 0,
+  "substats": [
+    {
+      "key": "atk",
+      "value": 19.0
+    },
+    {
+      "key": "critDMG_",
+      "value": 7.0
+    },
+    {
+      "key": "eleMas",
+      "value": 21.0
+    }
+  ],
+  "unactivatedSubstats": [
+    {
+      "key": "critRate_",
+      "value": 3.1
+    }
+  ],
+  "location": "",
+  "lock": true,
+  "id": 1066
+}

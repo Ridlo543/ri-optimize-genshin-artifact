@@ -1,0 +1,29 @@
+{
+  "setKey": "ADayCarvedFromRisingWinds",
+  "slotKey": "circlet",
+  "rarity": 5,
+  "mainStatKey": "atk_",
+  "level": 17,
+  "substats": [
+    {
+      "key": "critDMG_",
+      "value": 28.0
+    },
+    {
+      "key": "critRate_",
+      "value": 7.4
+    },
+    {
+      "key": "enerRech_",
+      "value": 6.5
+    },
+    {
+      "key": "atk",
+      "value": 16.0
+    }
+  ],
+  "unactivatedSubstats": [],
+  "location": "",
+  "lock": true,
+  "id": 513
+}
