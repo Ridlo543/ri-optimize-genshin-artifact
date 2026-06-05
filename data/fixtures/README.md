@@ -27,10 +27,27 @@ Do not copy the whole symlink target into this repository. Use the small fixture
 - `screenshots/artifact-inventory-plus20.jpg`: equipped-character artifact screen with a +20 selected artifact. A character is visible in the center, and the right detail panel includes equipped/action controls.
 - `screenshots/artifact-inventory-unactivated.jpg`: equipped-character artifact screen with a +0 selected artifact and visible `(unactivated)` text.
 - `screenshots/bag-inventory-raw-1920x1200.png`: bag/inventory artifact screen without character model in the center; this is the raw 16:10 layout used for grid/card capture calibration.
+- `screenshots/bag-grid-live-1280x800.png`: live capture where the Artifact bag grid is open but the detail panel is not visible; expected state is `artifact-bag-grid`, not OCR-ready.
 - `screenshots/bag-grid-diagnostic-plus20-8x5.png`: Inventory Kamera diagnostic overlay for 8x5 grid detection on a +20 artifact page.
 - `screenshots/bag-grid-diagnostic-unactivated-8x5.png`: Inventory Kamera diagnostic overlay for 8x5 grid detection with a +0 unactivated artifact selected.
 - `screenshots/bag-grid-diagnostic-4star-8x5.png`: Inventory Kamera diagnostic overlay with a 4-star artifact selected.
 - `screenshots/bag-item-count.png`: cropped artifact inventory count text, expected to parse `1783/2400`.
+
+## ROI Fixture Regions
+
+Use these normalized client rectangles when testing ROI parsing against 1920x1200 screenshot fixtures:
+
+```json
+{ "x": 0.68125, "y": 0.1, "width": 0.2572916667, "height": 0.8016666667, "unit": "normalized-client" }
+```
+
+This region targets the bag/inventory artifact card in `bag-inventory-raw-1920x1200.png`.
+
+```json
+{ "x": 0.75625, "y": 0.075, "width": 0.2427083333, "height": 0.8333333333, "unit": "normalized-client" }
+```
+
+This region targets the character artifact panel in `artifact-inventory-plus20.jpg` and `artifact-inventory-unactivated.jpg`.
 
 ## Selected Artifact Fixtures
 

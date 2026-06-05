@@ -109,6 +109,10 @@ internal static partial class SubstatTextParser
         string normalized = line
             .Replace("•", string.Empty, StringComparison.Ordinal)
             .Replace("*", string.Empty, StringComparison.Ordinal)
+            .Replace("#", "+", StringComparison.Ordinal)
+            .Replace("“", string.Empty, StringComparison.Ordinal)
+            .Replace("”", string.Empty, StringComparison.Ordinal)
+            .Replace("\"", string.Empty, StringComparison.Ordinal)
             .Replace(" ", string.Empty, StringComparison.Ordinal)
             .Trim();
         return Regex.Replace(normalized, @"^[^A-Za-z]+", string.Empty);

@@ -1,0 +1,135 @@
+using System.Drawing;
+
+namespace GenshinArtifactScanner.Win;
+
+internal static class ScreenStateDetector
+{
+    public static ScreenStateInfo Detect(Bitmap screenshot)
+    {
+        ArgumentNullException.ThrowIfNull(screenshot);
+
+        double bagTitleOrange = Ratio(screenshot, Rect(1308, 120, 494, 57), IsArtifactOrange);
+        double bagPanelBeige = Ratio(screenshot, Rect(1308, 120, 494, 962), IsArtifactPanelBeige);
+        if (bagTitleOrange > 0.45 && bagPanelBeige > 0.45)
+        {
+            return new ScreenStateInfo
+            {
+                Code = ScreenStateCodes.ArtifactBagDetail,
+                ReadyForArtifactOcr = true,
+                Confidence = Clamp01((bagTitleOrange + bagPanelBeige) / 2),
+                Message = "Artifact bag detail panel detected."
+            };
+        }
+
+        double rightRed = Ratio(screenshot, Rect(1420, 95, 470, 720), IsCharacterArtifactRed);
+        double centerRed = Ratio(screenshot, Rect(670, 120, 660, 900), IsCharacterArtifactRed);
+        if (rightRed > 0.35 && centerRed > 0.25)
+        {
+            return new ScreenStateInfo
+            {
+                Code = ScreenStateCodes.CharacterArtifactDetail,
+                ReadyForArtifactOcr = true,
+                Confidence = Clamp01((rightRed + centerRed) / 2),
+                Message = "Character artifact detail panel detected."
+            };
+        }
+
+        double topNavDark = Ratio(screenshot, Rect(0, 0, 520, 130), IsInventoryDarkBlue);
+        double gridGold = Ratio(screenshot, Rect(80, 145, 1200, 760), IsArtifactCardGold);
+        if (topNavDark > 0.55 && gridGold > 0.20)
+        {
+            return new ScreenStateInfo
+            {
+                Code = ScreenStateCodes.ArtifactBagGrid,
+                ReadyForArtifactOcr = false,
+                Confidence = Clamp01((topNavDark + gridGold) / 2),
+                Message = "Artifact inventory grid detected, but no artifact detail panel is visible."
+            };
+        }
+
+        double paimonLightMenu = Ratio(screenshot, Rect(0, 60, 520, 820), IsPaimonMenuLight);
+        if (paimonLightMenu > 0.35 && gridGold < 0.12)
+        {
+            return new ScreenStateInfo
+            {
+                Code = ScreenStateCodes.PaimonMenu,
+                ReadyForArtifactOcr = false,
+                Confidence = Clamp01(paimonLightMenu),
+                Message = "Paimon or main menu detected. Open Artifact Bag with B or Character with C, then open artifact details."
+            };
+        }
+
+        return new ScreenStateInfo
+        {
+            Code = ScreenStateCodes.UnknownGameScreen,
+            ReadyForArtifactOcr = false,
+            Confidence = 0.5,
+            Message = "Open Artifact Bag with B or Character with C, then open artifact details."
+        };
+    }
+
+    private static RectangleF Rect(float x, float y, float width, float height)
+    {
+        return new RectangleF(x / 1920f, y / 1200f, width / 1920f, height / 1200f);
+    }
+
+    private static double Ratio(Bitmap screenshot, RectangleF normalizedRect, Func<Color, bool> predicate)
+    {
+        Rectangle rectangle = ImageCropper.Scale(normalizedRect, screenshot.Width, screenshot.Height);
+        rectangle = Rectangle.Intersect(new Rectangle(Point.Empty, screenshot.Size), rectangle);
+        if (rectangle.Width <= 0 || rectangle.Height <= 0)
+        {
+            return 0;
+        }
+
+        int matches = 0;
+        int total = rectangle.Width * rectangle.Height;
+        for (int y = rectangle.Top; y < rectangle.Bottom; y++)
+        {
+            for (int x = rectangle.Left; x < rectangle.Right; x++)
+            {
+                if (predicate(screenshot.GetPixel(x, y)))
+                {
+                    matches++;
+                }
+            }
+        }
+
+        return total == 0 ? 0 : matches / (double)total;
+    }
+
+    private static bool IsArtifactOrange(Color pixel)
+    {
+        return pixel.R > 140 && pixel.G is > 55 and < 160 && pixel.B < 110 && pixel.R > pixel.G * 1.25;
+    }
+
+    private static bool IsArtifactPanelBeige(Color pixel)
+    {
+        return pixel.R > 150 && pixel.G > 125 && pixel.B > 95 && Math.Abs(pixel.R - pixel.G) < 85 && pixel.R > pixel.B;
+    }
+
+    private static bool IsArtifactCardGold(Color pixel)
+    {
+        return pixel.R > 145 && pixel.G is > 70 and < 170 && pixel.B < 110 && pixel.R > pixel.G * 1.1;
+    }
+
+    private static bool IsInventoryDarkBlue(Color pixel)
+    {
+        return pixel.B > 45 && pixel.R < 95 && pixel.G < 105;
+    }
+
+    private static bool IsCharacterArtifactRed(Color pixel)
+    {
+        return pixel.R > 100 && pixel.G < 100 && pixel.B < 95;
+    }
+
+    private static bool IsPaimonMenuLight(Color pixel)
+    {
+        return pixel.R > 185 && pixel.G > 170 && pixel.B > 145 && Math.Abs(pixel.R - pixel.G) < 45;
+    }
+
+    private static double Clamp01(double value)
+    {
+        return Math.Max(0, Math.Min(1, value));
+    }
+}

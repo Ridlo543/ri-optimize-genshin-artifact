@@ -11,13 +11,24 @@ internal static class ArtifactImagePreprocessor
         return ApplyColorMatrix(source, CreateSubstatMatrix());
     }
 
-    public static string SaveDebugImage(Bitmap image, string sourcePath)
+    public static Bitmap PreprocessText(Bitmap source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        using Bitmap scaled = Scale(source, 3);
+        return ApplyColorMatrix(scaled, CreateSubstatMatrix());
+    }
+
+    public static string SaveDebugImage(Bitmap image, string sourcePath, string fieldName)
     {
         ArgumentNullException.ThrowIfNull(image);
 
         Directory.CreateDirectory(Path.Combine("logs", "scanner", "debug"));
         string safeName = Path.GetFileNameWithoutExtension(sourcePath);
-        string outputPath = Path.Combine("logs", "scanner", "debug", $"{safeName}-substats-preprocessed.png");
+        if (string.IsNullOrWhiteSpace(safeName))
+        {
+            safeName = "image";
+        }
+        string outputPath = Path.Combine("logs", "scanner", "debug", $"{safeName}-{fieldName}-preprocessed.png");
         image.Save(outputPath, ImageFormat.Png);
         return Path.GetFullPath(outputPath);
     }
@@ -37,6 +48,15 @@ internal static class ArtifactImagePreprocessor
             source.Height,
             GraphicsUnit.Pixel,
             attributes);
+        return output;
+    }
+
+    private static Bitmap Scale(Bitmap source, int factor)
+    {
+        Bitmap output = new(source.Width * factor, source.Height * factor, PixelFormat.Format24bppRgb);
+        using Graphics graphics = Graphics.FromImage(output);
+        graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+        graphics.DrawImage(source, new Rectangle(0, 0, output.Width, output.Height));
         return output;
     }
 

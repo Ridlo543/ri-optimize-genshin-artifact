@@ -8,9 +8,13 @@
     "test": "pnpm -r --if-present test",
     "dev:desktop": "pnpm --filter @ri-genshin/desktop dev",
     "tauri:dev": "pnpm --filter @ri-genshin/desktop tauri dev",
+    "scanner:publish:tauri": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/publish-scanner-sidecar.ps1",
     "scanner:status": "dotnet run --project apps/scanner-win/GenshinArtifactScanner.Win.csproj -- status",
     "scanner:sample": "dotnet run --project apps/scanner-win/GenshinArtifactScanner.Win.csproj -- sample",
-    "scanner:scan": "dotnet run --project apps/scanner-win/GenshinArtifactScanner.Win.csproj -- scan-visible-artifact"
+    "scanner:classify": "dotnet run --project apps/scanner-win/GenshinArtifactScanner.Win.csproj -- classify-visible-screen",
+    "scanner:scan": "dotnet run --project apps/scanner-win/GenshinArtifactScanner.Win.csproj -- scan-visible-artifact",
+    "scanner:screenshot": "dotnet run --project apps/scanner-win/GenshinArtifactScanner.Win.csproj -- parse-screenshot-artifact data/fixtures/screenshots/bag-inventory-raw-1920x1200.png",
+    "scanner:screenshots": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-screenshot-fixtures.ps1"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

@@ -6,17 +6,18 @@ The app combines:
 
 - Tauri v2 + React/Vite/TypeScript desktop UI.
 - A pure TypeScript artifact probability engine.
-- A C# .NET Windows scanner sidecar for process detection, screen capture, and future OCR parsing.
+- A C# .NET Windows scanner sidecar for process detection, ROI screen capture, and OCR parsing.
 
 ## Current Status
 
-This is the initial MVP scaffold:
+This is an active MVP implementation:
 
 - Probability core is implemented and covered by unit tests.
-- Desktop UI can evaluate fixture/manual scanner JSON.
-- Tauri command wrappers are wired to the C# sidecar.
-- The scanner sidecar can detect the Genshin window and capture the visible artifact panel.
-- OCR parsing is intentionally staged for the next iteration and should be developed with fixture crops first.
+- Desktop UI can evaluate fixture/manual scanner JSON and scanner results.
+- Tauri command wrappers are wired to the C# sidecar, including multi-window ROI overlay and assistant bubble support.
+- The scanner sidecar can detect the Genshin window, crop a user-configured artifact-card ROI, hash the ROI, and OCR supported artifact panels.
+- Fixture coverage includes GOOD import, substat OCR crops, full screenshot parsing, passive screen-state detection, and ROI parsing.
+- Live Genshin ROI calibration remains the main manual verification step.
 
 ## Safety
 
@@ -57,6 +58,12 @@ Run scanner commands:
 pnpm scanner:status
 pnpm scanner:sample
 pnpm scanner:scan
+```
+
+Primary live scanning now uses a normalized ROI:
+
+```bash
+dotnet run --project apps/scanner-win/GenshinArtifactScanner.Win.csproj -- scan-region-artifact --region-json "{ \"x\": 0.68, \"y\": 0.1, \"width\": 0.27, \"height\": 0.8, \"unit\": \"normalized-client\" }"
 ```
 
 ## Workspace

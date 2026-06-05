@@ -83,14 +83,44 @@ export interface ScanConfidence {
 export interface ScannerCapture {
   resolution: string;
   capturedAt: string;
+  layout?: string;
+  screenshotImagePath?: string;
   artifactPanelImagePath?: string;
+  regionImagePath?: string;
+  screenshotHash?: string;
+  regionHash?: string;
+  region?: ScanRegion;
+}
+
+export interface ScanRegion {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  unit: "normalized-client";
+}
+
+export type ScannerScreenStateCode =
+  | "game-not-found"
+  | "artifact-bag-grid"
+  | "artifact-bag-detail"
+  | "character-artifact-detail"
+  | "paimon-menu"
+  | "unknown-game-screen";
+
+export interface ScannerScreenState {
+  code: ScannerScreenStateCode;
+  readyForArtifactOcr: boolean;
+  confidence: number;
+  message: string;
 }
 
 export interface ScannerArtifactResult {
   source: "screen" | "fixture";
-  mode: "visible-artifact";
+  mode: "visible-artifact" | "fixture-card" | "screenshot-artifact" | "screen-classification" | "region-artifact" | "region-classification";
   confidence: ScanConfidence;
   artifact: GoodArtifact | null;
+  screenState?: ScannerScreenState;
   capture: ScannerCapture;
   error?: string;
 }

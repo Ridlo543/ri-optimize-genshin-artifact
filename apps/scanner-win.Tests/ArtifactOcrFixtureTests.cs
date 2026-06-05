@@ -40,6 +40,89 @@ public sealed class ArtifactOcrFixtureTests
     }
 
     [TestMethod]
+    public void ParseFixtureCard_Artifact0AssemblesFullCard()
+    {
+        using OcrTextReader reader = new();
+        ArtifactOcrService service = new(reader);
+        FixtureArtifactParser parser = new(service);
+
+        FixtureCardParseResult result = parser.ParseCard(GetFixtureFolder("artifact0"));
+
+        result.Passed.Should().BeTrue(string.Join(Environment.NewLine, result.Mismatches));
+        result.ScanResult.Artifact.Should().NotBeNull();
+        result.ScanResult.Artifact!.SlotKey.Should().Be("flower");
+        result.ScanResult.Artifact.MainStatKey.Should().Be("hp");
+        result.ScanResult.Artifact.Level.Should().Be(20);
+        result.ScanResult.Artifact.Lock.Should().BeTrue();
+    }
+
+    [TestMethod]
+    public void ParseFixtureCard_Artifact1000PreservesUnactivatedSubstat()
+    {
+        using OcrTextReader reader = new();
+        ArtifactOcrService service = new(reader);
+        FixtureArtifactParser parser = new(service);
+
+        FixtureCardParseResult result = parser.ParseCard(GetFixtureFolder("artifact1000"));
+
+        result.Passed.Should().BeTrue(string.Join(Environment.NewLine, result.Mismatches));
+        result.ScanResult.Artifact.Should().NotBeNull();
+        result.ScanResult.Artifact!.SlotKey.Should().Be("plume");
+        result.ScanResult.Artifact.MainStatKey.Should().Be("atk");
+        result.ScanResult.Artifact.UnactivatedSubstats.Should().ContainSingle();
+    }
+
+    [TestMethod]
+    public void ParseFixtureCard_Artifact1042ReadsEquippedLocation()
+    {
+        using OcrTextReader reader = new();
+        ArtifactOcrService service = new(reader);
+        FixtureArtifactParser parser = new(service);
+
+        FixtureCardParseResult result = parser.ParseCard(GetFixtureFolder("artifact1042"));
+
+        result.Passed.Should().BeTrue(string.Join(Environment.NewLine, result.Mismatches));
+        result.ScanResult.Artifact.Should().NotBeNull();
+        result.ScanResult.Artifact!.Location.Should().Be("Layla");
+    }
+
+    [TestMethod]
+    public void ParseFixtureCard_Artifact1082ReadsUnlockedState()
+    {
+        using OcrTextReader reader = new();
+        ArtifactOcrService service = new(reader);
+        FixtureArtifactParser parser = new(service);
+
+        FixtureCardParseResult result = parser.ParseCard(GetFixtureFolder("artifact1082"));
+
+        result.Passed.Should().BeTrue(string.Join(Environment.NewLine, result.Mismatches));
+        result.ScanResult.Artifact.Should().NotBeNull();
+        result.ScanResult.Artifact!.Lock.Should().BeFalse();
+    }
+
+    [TestMethod]
+    [DataRow("artifact0")]
+    [DataRow("artifact1000")]
+    [DataRow("artifact1021")]
+    [DataRow("artifact1027")]
+    [DataRow("artifact1035")]
+    [DataRow("artifact1042")]
+    [DataRow("artifact1066")]
+    [DataRow("artifact1082")]
+    [DataRow("artifact1743")]
+    [DataRow("artifact513")]
+    public void ParseFixtureCard_CuratedFixturesMatchExpectedArtifactJson(string fixtureName)
+    {
+        using OcrTextReader reader = new();
+        ArtifactOcrService service = new(reader);
+        FixtureArtifactParser parser = new(service);
+
+        FixtureCardParseResult result = parser.ParseCard(GetFixtureFolder(fixtureName));
+
+        result.Passed.Should().BeTrue(string.Join(Environment.NewLine, result.Mismatches));
+    }
+
+    [TestMethod]
     public void ReadText_MissingTessdataThrowsStructuredOcrUnavailableException()
     {
         string missingTessdata = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));

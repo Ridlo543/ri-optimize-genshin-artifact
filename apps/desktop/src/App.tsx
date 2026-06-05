@@ -1,5 +1,5 @@
-import { ChangeEvent, useEffect, useMemo, useState } from "react";
-import { Activity, Eye, FileJson, Pin, ScanLine, Square, Zap } from "lucide-react";
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+import { Activity, Eye, FileJson, Image as ImageIcon, Pin, ScanLine, SlidersHorizontal, Square, Zap } from "lucide-react";
 import {
   extractGoodArtifacts,
   GoodArtifact,
@@ -7,13 +7,27 @@ import {
   goodArtifactToArtifactInput,
   normalizeGoodArtifact,
   ScanConfidence,
-  ScannerArtifactResult
+  assessScannerResultTrust,
+  ScannerArtifactResult,
+  ScannerScreenState
 } from "@ri-genshin/artifact-schema";
 import { BatchEvaluationResult, DEFAULT_PROFILES, evaluateArtifactExact, evaluateGoodArtifactBatch, ProbabilityResult } from "@ri-genshin/probability-core";
+import { loadScanRegion, saveLatestScannerResult, saveRoiEditMode, saveRoiOpacity } from "./roi";
 import { SAMPLE_SCAN_RESULT } from "./sample";
-import { scanVisibleArtifact, scannerStatus, ScannerStatus } from "./scanner";
+import { classifyRegionArtifact, parseScreenshotFixture, scanRegionArtifact, scannerStatus, ScannerStatus } from "./scanner";
 
 const confidenceKeys = ["setKey", "slotKey", "mainStatKey", "level", "substats", "lock", "equipped"] as const;
+const screenshotFixtures = [
+  { label: "Bag +20", value: "bag-inventory-raw-1920x1200.png" },
+  { label: "Equipped +20", value: "artifact-inventory-plus20.jpg" },
+  { label: "Unactivated", value: "artifact-inventory-unactivated.jpg" },
+  { label: "Grid 1280", value: "bag-grid-live-1280x800.png" }
+] as const;
+type ScreenshotFixtureName = (typeof screenshotFixtures)[number]["value"];
+
+function toScreenshotFixtureName(value: string): ScreenshotFixtureName {
+  return screenshotFixtures.find((fixture) => fixture.value === value)?.value ?? screenshotFixtures[0].value;
+}
 
 type InputEvaluation =
   | {
@@ -39,13 +53,19 @@ export function App() {
   const [status, setStatus] = useState<ScannerStatus | null>(null);
   const [artifactJson, setArtifactJson] = useState(formatArtifactJson(SAMPLE_SCAN_RESULT));
   const [profileId, setProfileId] = useState(DEFAULT_PROFILES[0].id);
+  const [screenshotFixture, setScreenshotFixture] = useState<ScreenshotFixtureName>(screenshotFixtures[0].value);
   const [busy, setBusy] = useState(false);
   const [watching, setWatching] = useState(false);
-  const [message, setMessage] = useState("Fixture loaded. Press scan when Genshin artifact detail is visible.");
+  const [message, setMessage] = useState("Fixture loaded. Set ROI on the artifact card, then scan.");
+  const busyRef = useRef(false);
+  const watchPollingRef = useRef(false);
+  const lastScannedHashRef = useRef<string | null>(null);
 
   const profile = DEFAULT_PROFILES.find((item) => item.id === profileId) ?? DEFAULT_PROFILES[0];
 
   const evaluation = useMemo(() => evaluateJsonInput(artifactJson, profile), [artifactJson, profile]);
+  const scannerResult = useMemo(() => parseScannerResult(artifactJson), [artifactJson]);
+  const screenState = scannerResult?.screenState;
 
   useEffect(() => {
     void refreshStatus();
@@ -55,10 +75,20 @@ export function App() {
     if (!watching) {
       return undefined;
     }
+    let ignore = false;
+    const tick = () => {
+      if (!ignore) {
+        void handleWatchTick();
+      }
+    };
+    tick();
     const id = window.setInterval(() => {
-      void handleScan(true);
+      tick();
     }, 1000);
-    return () => window.clearInterval(id);
+    return () => {
+      ignore = true;
+      window.clearInterval(id);
+    };
   }, [watching]);
 
   async function refreshStatus() {
@@ -71,25 +101,90 @@ export function App() {
   }
 
   async function handleScan(silent = false) {
+    if (busyRef.current) {
+      return;
+    }
+    busyRef.current = true;
     setBusy(true);
     if (!silent) {
-      setMessage("Scanning visible artifact panel...");
+      setMessage("Scanning artifact ROI...");
     }
     try {
-      const result = await scanVisibleArtifact();
+      const result = await scanRegionArtifact(loadScanRegion());
+      if (result.capture.regionHash) {
+        lastScannedHashRef.current = result.capture.regionHash;
+      }
       setArtifactJson(formatArtifactJson(result));
-      setMessage(result.artifact ? "Scan complete." : result.error ?? "Scanner returned no artifact.");
+      saveLatestScannerResult(result);
+      setMessage(formatScannerMessage(result, "Scan complete."));
     } catch {
       setArtifactJson(formatArtifactJson(SAMPLE_SCAN_RESULT));
       setMessage("Scanner unavailable; fixture result loaded for UI/core development.");
     } finally {
+      busyRef.current = false;
       setBusy(false);
+    }
+  }
+
+  async function handleWatchTick() {
+    if (watchPollingRef.current || busyRef.current) {
+      return;
+    }
+
+    watchPollingRef.current = true;
+    try {
+      const classification = await classifyRegionArtifact(loadScanRegion());
+      if (!classification.screenState?.readyForArtifactOcr) {
+        setArtifactJson(formatArtifactJson(classification));
+        saveLatestScannerResult(classification);
+        setMessage(formatScannerMessage(classification, "Watching ROI..."));
+        return;
+      }
+
+      const hash = classification.capture.regionHash;
+      if (hash && hash === lastScannedHashRef.current) {
+        return;
+      }
+
+      lastScannedHashRef.current = hash ?? null;
+      await handleScan(true);
+    } catch {
+      setMessage("Watch requires the native Tauri scanner sidecar.");
+    } finally {
+      watchPollingRef.current = false;
     }
   }
 
   function loadFixture() {
     setArtifactJson(formatArtifactJson(SAMPLE_SCAN_RESULT));
+    saveLatestScannerResult(SAMPLE_SCAN_RESULT);
     setMessage("Fixture result loaded.");
+  }
+
+  function handleEditRoi() {
+    saveRoiEditMode(true);
+    saveRoiOpacity("visible");
+    setMessage("ROI edit mode enabled. Move or resize the red box, then lock it.");
+  }
+
+  async function handleScreenshotFixture() {
+    if (busyRef.current) {
+      return;
+    }
+    busyRef.current = true;
+    setBusy(true);
+    setMessage("Running OCR on screenshot fixture...");
+    try {
+      const result = await parseScreenshotFixture(screenshotFixture);
+      setArtifactJson(formatArtifactJson(result));
+      saveLatestScannerResult(result);
+      setMessage(formatScannerMessage(result, `Screenshot OCR complete: ${result.capture.layout ?? "unknown layout"}.`));
+    } catch {
+      setMessage("Screenshot OCR requires the native Tauri scanner sidecar.");
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
   }
 
   async function handleFileImport(event: ChangeEvent<HTMLInputElement>) {
@@ -98,7 +193,12 @@ export function App() {
       return;
     }
 
-    setArtifactJson(await file.text());
+    const text = await file.text();
+    setArtifactJson(text);
+    const importedScannerResult = parseScannerResult(text);
+    if (importedScannerResult) {
+      saveLatestScannerResult(importedScannerResult);
+    }
     setMessage(`Loaded ${file.name}.`);
     event.target.value = "";
   }
@@ -130,9 +230,24 @@ export function App() {
           {watching ? <Square size={16} /> : <Eye size={16} />}
           {watching ? "Stop" : "Watch"}
         </button>
+        <button onClick={handleEditRoi}>
+          <SlidersHorizontal size={16} />
+          Edit ROI
+        </button>
         <button onClick={loadFixture}>
           <Activity size={16} />
           Fixture
+        </button>
+        <select className="fixture-select" value={screenshotFixture} onChange={(event) => setScreenshotFixture(toScreenshotFixtureName(event.target.value))} disabled={busy}>
+          {screenshotFixtures.map((fixture) => (
+            <option key={fixture.value} value={fixture.value}>
+              {fixture.label}
+            </option>
+          ))}
+        </select>
+        <button onClick={() => void handleScreenshotFixture()} disabled={busy}>
+          <ImageIcon size={16} />
+          OCR
         </button>
         <label className="file-button">
           <FileJson size={16} />
@@ -145,6 +260,17 @@ export function App() {
       </section>
 
       <p className="message">{message}</p>
+      {screenState ? (
+        <section className={`screen-state screen-state--${screenState.readyForArtifactOcr ? "ready" : "wait"}`}>
+          <div>
+            <b>{screenStateLabel(screenState)}</b>
+            <span>{screenState.message}</span>
+          </div>
+          {scannerResult?.capture.regionHash ?? scannerResult?.capture.screenshotHash ? (
+            <small>{(scannerResult.capture.regionHash ?? scannerResult.capture.screenshotHash)?.slice(0, 10)}</small>
+          ) : null}
+        </section>
+      ) : null}
 
       <section className="grid">
         <article className="panel result-panel">
@@ -266,6 +392,44 @@ function formatArtifactJson(result: ScannerArtifactResult): string {
   return JSON.stringify(result, null, 2);
 }
 
+function parseScannerResult(json: string): ScannerArtifactResult | null {
+  try {
+    const parsed = JSON.parse(json);
+    return isScannerArtifactResult(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function formatScannerMessage(result: ScannerArtifactResult, readyMessage: string): string {
+  if (result.screenState && !result.screenState.readyForArtifactOcr) {
+    return result.screenState.message;
+  }
+  if (result.artifact) {
+    return readyMessage;
+  }
+  return result.error ?? result.screenState?.message ?? "Scanner returned no artifact.";
+}
+
+function screenStateLabel(screenState: ScannerScreenState): string {
+  switch (screenState.code) {
+    case "game-not-found":
+      return "Waiting";
+    case "artifact-bag-grid":
+      return "Artifact Grid";
+    case "artifact-bag-detail":
+      return "Bag Detail";
+    case "character-artifact-detail":
+      return "Character Detail";
+    case "paimon-menu":
+      return "Paimon Menu";
+    case "unknown-game-screen":
+      return "Open Details";
+    default:
+      return "Screen State";
+  }
+}
+
 function evaluateJsonInput(json: string, profile: (typeof DEFAULT_PROFILES)[number]): InputEvaluation {
   try {
     const parsed = JSON.parse(json);
@@ -273,16 +437,22 @@ function evaluateJsonInput(json: string, profile: (typeof DEFAULT_PROFILES)[numb
     const confidence = scannerResult?.confidence ?? {};
 
     if (scannerResult) {
-      if (!scannerResult.artifact) {
+      const trust = assessScannerResultTrust(scannerResult);
+      const scanWarnings = trust.warningMessages.map((message) => ({
+        code: "review-ocr-confidence",
+        message
+      }));
+
+      if (!trust.canEvaluate || !scannerResult.artifact) {
         return {
           kind: "error",
-          error: scannerResult.error ?? "No artifact data was returned by the scanner.",
+          error: trust.blockingReasons.join(" ") || scannerResult.error || "No artifact data was returned by the scanner.",
           confidence,
-          warnings: []
+          warnings: scanWarnings
         };
       }
 
-      return evaluateSingleGoodArtifact(scannerResult.artifact, confidence, profile);
+      return evaluateSingleGoodArtifact(scannerResult.artifact, confidence, profile, scanWarnings);
     }
 
     const artifacts = extractGoodArtifacts(parsed);
@@ -316,14 +486,19 @@ function evaluateJsonInput(json: string, profile: (typeof DEFAULT_PROFILES)[numb
   }
 }
 
-function evaluateSingleGoodArtifact(good: GoodArtifact, confidence: ScanConfidence, profile: (typeof DEFAULT_PROFILES)[number]): InputEvaluation {
+function evaluateSingleGoodArtifact(
+  good: GoodArtifact,
+  confidence: ScanConfidence,
+  profile: (typeof DEFAULT_PROFILES)[number],
+  warnings: GoodNormalizationWarning[] = []
+): InputEvaluation {
   const normalized = normalizeGoodArtifact(good);
   if (!normalized.artifact) {
     return {
       kind: "error",
       error: normalized.skipReason ?? "GOOD artifact could not be normalized.",
       confidence,
-      warnings: normalized.warnings
+      warnings: [...warnings, ...normalized.warnings]
     };
   }
 
@@ -333,24 +508,30 @@ function evaluateSingleGoodArtifact(good: GoodArtifact, confidence: ScanConfiden
       kind: "single",
       result: evaluateArtifactExact(artifact, profile),
       confidence,
-      warnings: normalized.warnings
+      warnings: [...warnings, ...normalized.warnings]
     };
   } catch (error) {
     return {
       kind: "error",
       error: error instanceof Error ? error.message : "Artifact could not be evaluated.",
       confidence,
-      warnings: normalized.warnings
+      warnings: [...warnings, ...normalized.warnings]
     };
   }
 }
 
 function isScannerArtifactResult(value: unknown): value is ScannerArtifactResult {
-  return isRecord(value) && value.mode === "visible-artifact" && isRecord(value.capture) && isRecord(value.confidence);
+  return (
+    isRecord(value) &&
+    typeof value.mode === "string" &&
+    ["visible-artifact", "fixture-card", "screenshot-artifact", "screen-classification", "region-artifact", "region-classification"].includes(value.mode) &&
+    isRecord(value.capture) &&
+    isRecord(value.confidence)
+  );
 }
 
 function isBatchPayload(value: unknown): boolean {
-  return isRecord(value) && (Array.isArray(value.artifacts) || Array.isArray(value.samples)) || Array.isArray(value);
+  return (isRecord(value) && (Array.isArray(value.artifacts) || Array.isArray(value.samples))) || Array.isArray(value);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

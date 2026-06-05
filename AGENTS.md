@@ -11,6 +11,7 @@ This repository is a Windows desktop-first Genshin Impact artifact decision assi
 - Keep React/Tauri UI in `apps/desktop`; do not put artifact math inside React components.
 - Keep screen capture and OCR work in `apps/scanner-win`; do not run heavy OCR in React.
 - Treat scanner output as untrusted input and validate it before evaluation.
+- Prefer ROI-first live scanning: the user positions a normalized artifact-card rectangle, the scanner crops only that region, and full-screen parsing remains fallback/debug.
 
 ## Scanner Safety Policy
 

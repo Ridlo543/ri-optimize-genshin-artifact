@@ -108,6 +108,7 @@ genshin-artifact-assistant.png
 apps/desktop/src-tauri/target/
 apps/desktop/src-tauri/Cargo.lock
 apps/desktop/src-tauri/gen/
+apps/desktop/src-tauri/binaries/
 
 # Scanner runtime output
 logs/

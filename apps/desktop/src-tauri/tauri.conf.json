@@ -5,7 +5,7 @@
   "identifier": "dev.ri-genshin.artifact-assistant",
   "build": {
     "beforeDevCommand": "pnpm dev",
-    "beforeBuildCommand": "pnpm build",
+    "beforeBuildCommand": "pnpm build:tauri",
     "devUrl": "http://localhost:5173",
     "frontendDist": "../dist"
   },
@@ -24,6 +24,42 @@
         "center": false,
         "x": 32,
         "y": 72
+      },
+      {
+        "label": "roi-overlay",
+        "title": "Artifact ROI Overlay",
+        "url": "index.html?window=roi-overlay",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 320,
+        "minHeight": 240,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "visible": true,
+        "focus": false,
+        "x": 0,
+        "y": 0
+      },
+      {
+        "label": "assistant-bubble",
+        "title": "Artifact Assistant Bubble",
+        "url": "index.html?window=assistant-bubble",
+        "width": 340,
+        "height": 220,
+        "minWidth": 260,
+        "minHeight": 120,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "visible": true,
+        "focus": false,
+        "x": 1520,
+        "y": 120
       }
     ],
     "security": {
@@ -33,6 +69,14 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "category": "Utility"
+    "category": "Utility",
+    "externalBin": [
+      "binaries/GenshinArtifactScanner.Win"
+    ],
+    "resources": [
+      "binaries/*.dll",
+      "binaries/*.json",
+      "binaries/tessdata"
+    ]
   }
 }

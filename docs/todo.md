@@ -39,24 +39,54 @@
   - `ocr-substats <imagePath>` reads `substats.png` through Tesseract.
   - `parse-fixture-artifact <fixtureFolder>` compares OCR output with fixture `artifact.json`.
   - `artifact0` and `artifact1000` fixture tests pass.
+- [x] Add fixture full-card OCR assembly.
+  - `parse-fixture-card <fixtureFolder>` reads fixture crops for set/name, slot, main stat, level, lock, equipped/location, and substats.
+  - Fixture-card output includes `ScanResult`, per-field confidence, raw OCR text diagnostics, and mismatches against `artifact.json`.
+  - Tests cover +20 flower, +0 plume with unactivated substat, equipped location, and unlocked lock state.
+- [x] Verify native Tauri Rust backend is available.
+  - Rust is installed under `%USERPROFILE%\.cargo\bin`; current shell may need PATH prepended before running cargo.
+  - `cargo check` passes after publishing the Tauri sidecar binary.
+  - Tauri production config now includes scanner `externalBin` and a publish script for the C# sidecar.
+- [x] Calibrate full screenshot artifact parsing against sample images.
+  - `parse-screenshot-artifact <imagePath>` detects bag/inventory card layout and equipped-character panel layout.
+  - Sample screenshot tests cover `bag-inventory-raw-1920x1200.png`, `artifact-inventory-plus20.jpg`, and `artifact-inventory-unactivated.jpg`.
+  - `scan-visible-artifact` now attempts the same screenshot OCR assembly after capturing the live Genshin client.
+- [x] Add scanner confidence trust gate in the UI path.
+  - `packages/artifact-schema` exposes `assessScannerResultTrust`.
+  - Severe low-confidence required fields block evaluation instead of showing a recommendation.
+  - Medium-confidence fields still allow evaluation but show OCR review warnings.
+  - `pnpm scanner:screenshots` smoke-tests all current full screenshot samples.
+- [x] Add native UI flow for screenshot fixture OCR.
+  - Desktop toolbar includes a screenshot fixture selector and OCR button.
+  - The UI calls Tauri command `scanner_parse_screenshot_fixture`, which maps fixture file names inside the scanner sidecar.
+  - This avoids relying on browser file inputs for filesystem paths.
+- [x] Add passive screen-state detection before OCR.
+  - Scanner emits `screenState` with `game-not-found`, `artifact-bag-grid`, `artifact-bag-detail`, `character-artifact-detail`, `paimon-menu`, or `unknown-game-screen`.
+  - `bag-grid-live-1280x800.png` is a regression fixture for grid-only Artifact Bag and must not trigger Tesseract OCR.
+  - `classify-visible-screen`, `classify-screenshot-artifact`, and `classify-screenshot-fixture` are implemented.
+  - Desktop Watch mode polls classification about once per second and only scans when the screen is OCR-ready and the screenshot hash changed.
+- [x] Add ROI-first scanner and floating assistant UI.
+  - `scan-region-artifact --region-json <json>` captures Genshin client, crops the normalized ROI, saves `logs/scanner/region-last.png`, and emits `capture.regionHash`.
+  - `classify-region-artifact --region-json <json>` hashes/classifies the ROI before OCR.
+  - `parse-region-fixture` and `classify-region-fixture` cover curated screenshot fixtures without relying on a live game.
+  - Tauri now has `roi-overlay` and `assistant-bubble` windows in addition to the main panel.
+  - ROI edit mode is draggable/resizable; locked mode is click-through via Tauri `setIgnoreCursorEvents(true)`.
+  - The assistant bubble shows compact decision, CV, expected CV/score, `P >= 30`, OCR confidence, and controls for Scan/Watch/Edit ROI/Opacity/Open Panel.
 
 ## Next High Priority TODO
 
-- Wire full artifact OCR assembly for visible/card crops.
-  - Add OCR for set name, slot, main stat, level, lock, and equipped/location.
-  - Use the existing substat OCR as one field inside the full `ScanResult`.
-  - Keep low-confidence full artifacts blocked for manual review in the UI.
-- Improve scanner crop/layout classification.
-  - Calibrate equipped-character screenshots separately from bag/inventory screenshots.
-  - Keep diagnostic grid screenshots for item-cell detection only.
+- Live ROI calibration with Genshin.
+  - Run native Tauri, resize the red ROI around the right artifact card, lock it, and confirm `logs/scanner/region-last.png` contains only the card/panel.
+  - Test both Bag artifact card and Character artifact panel layouts.
+  - Capture failing `region-last.png` samples before changing panel-relative crop profiles.
   - Preserve the screenshot/OCR-only safety policy.
 - Add live manual scanner verification.
   - Run with Genshin visible in windowed or borderless mode.
-  - Confirm `logs/scanner/visible-artifact-last.png` captures the correct right panel.
+  - Confirm `logs/scanner/region-last.png` captures the selected ROI.
   - Confirm OCR confidence drops or blocks recommendation when fields are missing.
-- Verify native Tauri shell after Rust is installed.
-  - Browser/Vite build is verified.
-  - Tauri native build remains pending until `rustc`/`cargo` are available.
+- Verify native Tauri shell window manually.
+  - Rust backend `cargo check` is verified.
+  - Native interactive window smoke remains pending because it starts the desktop app UI and requires checking click-through over the game.
 
 ## Manual Testing Checklist
 
@@ -65,11 +95,25 @@
   - Open `http://localhost:5173`.
   - Confirm fixture loads and recommendation appears.
   - Edit Scanner JSON and confirm score/recommendation recalculates.
+  - In native Tauri mode, select a screenshot fixture and press `OCR`; confirm Scanner JSON updates and recommendation/warnings recalculate.
+  - In native Tauri mode, use `Edit ROI`, resize the red box over the artifact card, lock it, and confirm game clicks pass through the overlay.
+  - Use the assistant bubble `Scan` button and confirm compact decision/metrics update.
+  - Toggle assistant bubble `Watch`; change artifact selection and confirm scan refreshes only after ROI hash changes.
+  - Toggle ROI opacity through `hidden`, `faint`, and `visible`.
 - Scanner sidecar:
   - Run `pnpm scanner:status`.
   - Run `pnpm scanner:sample`.
+  - Run `pnpm scanner:classify`.
   - Run `pnpm scanner:scan` with Genshin closed and confirm structured JSON error.
   - Run `pnpm scanner:scan` with Genshin open and confirm `logs/scanner/visible-artifact-last.png` is created.
+  - Run `dotnet run --project apps/scanner-win/GenshinArtifactScanner.Win.csproj -- classify-screenshot-fixture bag-grid-live-1280x800.png`.
+  - Run `dotnet run --project apps/scanner-win/GenshinArtifactScanner.Win.csproj -- parse-fixture-card data/fixtures/artifacts/artifact0`.
+  - Run `dotnet run --project apps/scanner-win/GenshinArtifactScanner.Win.csproj -- parse-screenshot-artifact data/fixtures/screenshots/bag-inventory-raw-1920x1200.png`.
+  - Run `dotnet run --project apps/scanner-win/GenshinArtifactScanner.Win.csproj -- parse-screenshot-artifact data/fixtures/screenshots/artifact-inventory-unactivated.jpg`.
+  - Run `dotnet run --project apps/scanner-win/GenshinArtifactScanner.Win.csproj -- parse-screenshot-fixture bag-inventory-raw-1920x1200.png`.
+  - Run `dotnet run --project apps/scanner-win/GenshinArtifactScanner.Win.csproj -- parse-region-fixture bag-inventory-raw-1920x1200.png "{ \"x\": 0.68125, \"y\": 0.1, \"width\": 0.2572916667, \"height\": 0.8016666667, \"unit\": \"normalized-client\" }"`.
+  - Run `dotnet run --project apps/scanner-win/GenshinArtifactScanner.Win.csproj -- parse-region-fixture artifact-inventory-unactivated.jpg "{ \"x\": 0.75625, \"y\": 0.075, \"width\": 0.2427083333, \"height\": 0.8333333333, \"unit\": \"normalized-client\" }"`.
+  - Run `pnpm scanner:screenshots` to smoke-test all current full screenshot fixtures.
 - GOOD import:
   - Load `data/fixtures/good/artifact-samples.json`.
   - Confirm placeholder entries are filtered before mapping.
@@ -101,6 +145,7 @@
 - `data/fixtures/screenshots/artifact-inventory-plus20.jpg`: full inventory screenshot with +20 selected artifact.
 - `data/fixtures/screenshots/artifact-inventory-unactivated.jpg`: full inventory screenshot with visible `(unactivated)` substat text.
 - `data/fixtures/screenshots/bag-inventory-raw-1920x1200.png`: raw bag/inventory layout at 1920x1200.
+- `data/fixtures/screenshots/bag-grid-live-1280x800.png`: live grid-only Artifact Bag capture; expected state is `artifact-bag-grid` and not OCR-ready.
 - `data/fixtures/screenshots/bag-grid-diagnostic-plus20-8x5.png`: 8x5 grid detection overlay for +20 page.
 - `data/fixtures/screenshots/bag-grid-diagnostic-unactivated-8x5.png`: 8x5 grid detection overlay for unactivated page.
 - `data/fixtures/screenshots/bag-grid-diagnostic-4star-8x5.png`: 8x5 grid detection overlay for 4-star page.
@@ -126,5 +171,12 @@
 - [x] Add OCR-like parser tests for `artifact0` and `artifact1000` expected text.
 - [x] Add schema tests for fixture `artifact.json` files.
 - [x] Add true image OCR tests for `artifact0/substats.png` and `artifact1000/substats.png`.
-- [ ] Add scanner integration tests that compare cropped OCR output to fixture `artifact.json`.
+- [x] Add scanner integration tests that compare cropped OCR output to fixture `artifact.json`.
+- [x] Add full screenshot parser tests for bag/inventory and equipped-character sample screenshots.
+- [x] Add scanner confidence trust policy tests.
+- [x] Add screen-state tests for grid-only 1280x800 screenshots and OCR-ready detail screenshots.
+- [x] Add ROI parser tests for bag-card and character-panel screenshot regions.
+- [x] Add desktop assistant summary tests for setup, review ROI, and compact metrics.
 - [ ] Add Playwright/manual UI proof for loading `artifact-samples.json` through the Import control.
+- [ ] Manually verify live `scan-region-artifact` with Genshin open on actual artifact detail panels at 16:9 and 16:10 resolutions.
+- [ ] Manually verify Tauri ROI overlay click-through and assistant bubble over Genshin.
