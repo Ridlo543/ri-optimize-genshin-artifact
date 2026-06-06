@@ -28,6 +28,7 @@ import {
   applyScannerCorrection,
   ArtifactMainStatCorrection,
   ArtifactSlotCorrection,
+  getArtifactMainStatOptions,
   getScannerCorrectionState
 } from "./scannerCorrection";
 import {
@@ -320,6 +321,12 @@ export function AssistantBubbleApp() {
     setError("");
   }
 
+  function updateManualSlotKey(slotKey: ArtifactSlotCorrection) {
+    const options = getArtifactMainStatOptions(slotKey);
+    setManualSlotKey(slotKey);
+    setManualMainStatKey((current) => options.includes(current) ? current : (options[0] ?? current));
+  }
+
   return (
     <AssistantBubbleSurface
       summary={summary}
@@ -342,7 +349,7 @@ export function AssistantBubbleApp() {
               needsSlotKey: correction.needsSlotKey,
               needsMainStatKey: correction.needsMainStatKey,
               onLevelChange: setManualLevel,
-              onSlotKeyChange: setManualSlotKey,
+              onSlotKeyChange: updateManualSlotKey,
               onMainStatKeyChange: setManualMainStatKey,
               onApply: applyManualCorrection
             }

@@ -53,6 +53,15 @@ public sealed class ArtifactTextParserTests
     }
 
     [TestMethod]
+    [DataRow("Af", "sands", "atk_")]
+    [DataRow("Hf", "sands", "hp_")]
+    [DataRow("Df", "circlet", "def_")]
+    public void ParseMainStatKey_ReadsShortSlotBoundOcrFallback(string text, string slotKey, string expected)
+    {
+        ArtifactTextParser.ParseMainStatKey(text, slotKey).Should().Be(expected);
+    }
+
+    [TestMethod]
     [DataRow("+0", 0)]
     [DataRow("+10", 10)]
     [DataRow("+16", 16)]
@@ -68,6 +77,8 @@ public sealed class ArtifactTextParserTests
     [TestMethod]
     [DataRow("+21")]
     [DataRow("191")]
+    [DataRow("4")]
+    [DataRow("* * wr 4")]
     [DataRow("")]
     public void ParseLevel_RejectsInvalidArtifactLevels(string text)
     {

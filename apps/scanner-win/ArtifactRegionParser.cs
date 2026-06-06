@@ -33,9 +33,9 @@ internal sealed class ArtifactRegionParser(ArtifactOcrService ocrService)
             Name: RectFromPanel(11, 29, 420, 96, 466, 1000),
             Slot: RectFromPanel(11, 128, 360, 42, 466, 1000),
             MainStat: RectFromPanel(11, 171, 300, 58, 466, 1000),
-            Level: RectFromPanel(11, 286, 120, 50, 466, 1000),
+            Level: RectFromPanel(11, 238, 120, 58, 466, 1000),
             Lock: RectFromPanel(332, 79, 47, 47, 466, 1000),
-            Substats: RectFromPanel(11, 330, 455, 180, 466, 1000),
+            Substats: RectFromPanel(11, 286, 455, 224, 466, 1000),
             Equipped: RectFromPanel(11, 940, 420, 60, 466, 1000)));
 
     private readonly ArtifactOcrService ocrService = ocrService ?? throw new ArgumentNullException(nameof(ocrService));
@@ -88,7 +88,7 @@ internal sealed class ArtifactRegionParser(ArtifactOcrService ocrService)
         }
 
         OcrFieldResult<string> slot = fields.Slot;
-        OcrFieldResult<string> mainStat = fields.MainStat;
+        OcrFieldResult<string> mainStat = InferFixedMainStat(slot, fields.MainStat);
         OcrFieldResult<int> level = fields.Level;
         OcrFieldResult<bool> locked = fields.Locked;
         OcrFieldResult<string> location = fields.Location;
@@ -235,7 +235,8 @@ internal sealed class ArtifactRegionParser(ArtifactOcrService ocrService)
     private static RegionLayoutProfile? DetectProfile(Bitmap panel)
     {
         double red = Ratio(panel, IsCharacterArtifactRed);
-        if (red > 0.35)
+        double beige = Ratio(panel, IsBagArtifactBeige);
+        if (red > 0.28 && beige < 0.25)
         {
             return CharacterPanelProfile;
         }
@@ -358,6 +359,35 @@ internal sealed class ArtifactRegionParser(ArtifactOcrService ocrService)
         };
     }
 
+    private static OcrFieldResult<string> InferFixedMainStat(OcrFieldResult<string> slot, OcrFieldResult<string> mainStat)
+    {
+        if (!string.IsNullOrWhiteSpace(mainStat.Value))
+        {
+            return mainStat;
+        }
+
+        string? inferred = slot.Value switch
+        {
+            "flower" => "hp",
+            "plume" => "atk",
+            _ => null
+        };
+        if (inferred is null)
+        {
+            return mainStat;
+        }
+
+        return new OcrFieldResult<string>
+        {
+            Field = "mainStatKey",
+            Value = inferred,
+            RawText = mainStat.RawText,
+            Confidence = Math.Max(0.9, slot.Confidence),
+            ImagePath = mainStat.ImagePath,
+            DebugImagePath = mainStat.DebugImagePath
+        };
+    }
+
     private static FieldReadResult MergeCharacterFields(FieldReadResult primary, FieldReadResult alternate)
     {
         OcrFieldResult<string> itemNameSetKey = PreferTextField(primary.ItemNameSetKey, alternate.ItemNameSetKey);
@@ -400,6 +430,12 @@ internal sealed class ArtifactRegionParser(ArtifactOcrService ocrService)
     private static OcrFieldResult<string> PreferTextField(OcrFieldResult<string> primary, OcrFieldResult<string> alternate)
     {
         if (string.IsNullOrWhiteSpace(primary.Value) && !string.IsNullOrWhiteSpace(alternate.Value))
+        {
+            return alternate;
+        }
+        if (string.IsNullOrWhiteSpace(primary.Value) &&
+            string.IsNullOrWhiteSpace(alternate.Value) &&
+            !string.IsNullOrWhiteSpace(alternate.RawText))
         {
             return alternate;
         }
@@ -517,6 +553,15 @@ internal sealed class ArtifactRegionParser(ArtifactOcrService ocrService)
     private static bool IsCharacterArtifactRed(Color pixel)
     {
         return pixel.R > 100 && pixel.G < 100 && pixel.B < 95;
+    }
+
+    private static bool IsBagArtifactBeige(Color pixel)
+    {
+        return pixel.R > 150 &&
+            pixel.G > 125 &&
+            pixel.B > 95 &&
+            Math.Abs(pixel.R - pixel.G) < 85 &&
+            pixel.R > pixel.B;
     }
 
     private static RectangleF RectFromPanel(float x, float y, float width, float height, float panelWidth, float panelHeight)

@@ -176,7 +176,7 @@ internal static partial class ArtifactTextParser
         {
             return slotKey == "flower" ? "hp" : "hp_";
         }
-        if (normalized is "h" && slotKey is "sands" or "circlet")
+        if (IsShortMainStatToken(normalized, 'h') && slotKey is "sands" or "circlet")
         {
             return "hp_";
         }
@@ -184,7 +184,7 @@ internal static partial class ArtifactTextParser
         {
             return slotKey == "plume" ? "atk" : "atk_";
         }
-        if (normalized is "a" && slotKey is "sands" or "circlet")
+        if (IsShortMainStatToken(normalized, 'a') && slotKey is "sands" or "circlet")
         {
             return "atk_";
         }
@@ -192,12 +192,17 @@ internal static partial class ArtifactTextParser
         {
             return "def_";
         }
-        if (normalized is "d" && slotKey is "sands" or "circlet")
+        if (IsShortMainStatToken(normalized, 'd') && slotKey is "sands" or "circlet")
         {
             return "def_";
         }
 
         return null;
+    }
+
+    private static bool IsShortMainStatToken(string normalized, char prefix)
+    {
+        return normalized.Length is > 0 and <= 3 && normalized[0] == prefix;
     }
 
     public static int? ParseLevel(string text)
@@ -246,10 +251,10 @@ internal static partial class ArtifactTextParser
             .Replace('B', '8');
     }
 
-    [GeneratedRegex(@"(?<!\d)\+?\s*(?<level>\d{1,2})(?!\d)")]
+    [GeneratedRegex(@"(?<!\d)\+\s*(?<level>\d{1,2})(?!\d)")]
     private static partial Regex LevelRegex();
 
-    [GeneratedRegex(@"^\s*\+?\s*(?<level>\d{1,2})(?![\d.])")]
+    [GeneratedRegex(@"^\s*\+\s*(?<level>\d{1,2})(?![\d.])")]
     private static partial Regex LeadingLevelRegex();
 
     [GeneratedRegex(@"Equipped\s*:\s*(?<location>[A-Za-z][A-Za-z\s'-]*)", RegexOptions.IgnoreCase)]

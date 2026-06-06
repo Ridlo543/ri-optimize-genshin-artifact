@@ -92,6 +92,9 @@
 - The parser classifies two current layouts:
   - `bag-inventory-card`: artifact card on the right side of bag/inventory.
   - `equipped-character-panel`: character visible in the middle, artifact detail text on the right.
+- ROI layout classification combines character-panel red evidence with bag-card beige evidence. Borderline red character panels must not fall into the bag profile only because their red ratio is near a threshold.
+- Long-title character panels use a dedicated level/substat crop profile. Artifact level parsing requires a visible `+` so OCR noise from rarity stars cannot become a false level.
+- Flower and Plume have mechanically fixed flat HP/ATK main stats. The scanner may infer those values from a trusted slot when the main-stat label is unreadable; other slots remain OCR-driven.
 - Current automated coverage uses:
   - `data/fixtures/screenshots/bag-inventory-raw-1920x1200.png`
   - `data/fixtures/screenshots/artifact-inventory-plus20.jpg`
@@ -110,6 +113,10 @@
   - `data/log-manual/error_artifact_bag_detail_1.png`
   - `data/log-manual/success_artifact_bag_detail_1_level0.png`
   - `data/log-manual/success_artifact_bag_detail_2_level20.png`
+  - `data/log-manual/error_artifact_character_detail_2.png`
+  - `data/log-manual/error_artifact_character_detail_3.png`
+  - `data/log-manual/error_artifact_character_detail_4.png`
+  - `data/log-manual/error_artifact_bag_detail_2.png`
 - `data/fixtures/screenshots/bag-grid-live-1280x800.png` is a regression fixture for grid-only Artifact Bag at 1280x800; it must classify as non-ready and must not run OCR.
 - `scan-visible-artifact` now captures the live Genshin client and runs the same screenshot parser only after the screen-state gate passes. If the screen is not ready, the scanner returns a structured JSON guide message and low confidence values.
 - The desktop UI uses `parse-screenshot-fixture` for native sample testing because browser file inputs do not reliably expose filesystem paths to the sidecar.

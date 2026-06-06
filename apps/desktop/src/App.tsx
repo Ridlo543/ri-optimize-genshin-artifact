@@ -20,10 +20,10 @@ import { classifyRegionArtifact, parseScreenshotFixture, scanRegionArtifact, sca
 import {
   applyScannerCorrection,
   ARTIFACT_LEVEL_OPTIONS,
-  ARTIFACT_MAIN_STAT_OPTIONS,
   ARTIFACT_SLOT_OPTIONS,
   ArtifactMainStatCorrection,
   ArtifactSlotCorrection,
+  getArtifactMainStatOptions,
   getScannerCorrectionState
 } from "./scannerCorrection";
 import { loadEvaluationProfile, saveEvaluationProfile } from "./evaluationProfile";
@@ -86,6 +86,7 @@ export function App() {
   const scannerResult = useMemo(() => parseScannerResult(artifactJson), [artifactJson]);
   const screenState = scannerResult?.screenState;
   const correction = useMemo(() => getScannerCorrectionState(scannerResult), [scannerResult]);
+  const manualMainStatOptions = getArtifactMainStatOptions(manualSlotKey);
 
   useEffect(() => {
     void refreshStatus();
@@ -221,6 +222,12 @@ export function App() {
     setArtifactJson(formatArtifactJson(corrected));
     saveLatestScannerResult(corrected);
     setMessage("Manual OCR correction applied.");
+  }
+
+  function updateManualSlotKey(slotKey: ArtifactSlotCorrection) {
+    const options = getArtifactMainStatOptions(slotKey);
+    setManualSlotKey(slotKey);
+    setManualMainStatKey((current) => options.includes(current) ? current : (options[0] ?? current));
   }
 
   async function handleEditRoi() {
@@ -446,7 +453,7 @@ export function App() {
                   {correction.needsSlotKey ? (
                     <label>
                       Slot
-                      <select value={manualSlotKey} onChange={(event) => setManualSlotKey(event.target.value as ArtifactSlotCorrection)}>
+                      <select value={manualSlotKey} onChange={(event) => updateManualSlotKey(event.target.value as ArtifactSlotCorrection)}>
                         {ARTIFACT_SLOT_OPTIONS.map((slot) => (
                           <option key={slot} value={slot}>
                             {friendlySlot(slot)}
@@ -459,7 +466,7 @@ export function App() {
                     <label>
                       Main
                       <select value={manualMainStatKey} onChange={(event) => setManualMainStatKey(event.target.value as ArtifactMainStatCorrection)}>
-                        {ARTIFACT_MAIN_STAT_OPTIONS.map((stat) => (
+                        {manualMainStatOptions.map((stat) => (
                           <option key={stat} value={stat}>
                             {friendlyStat(stat)}
                           </option>

@@ -26,6 +26,27 @@ export const ARTIFACT_MAIN_STAT_OPTIONS = [
 export type ArtifactSlotCorrection = (typeof ARTIFACT_SLOT_OPTIONS)[number];
 export type ArtifactMainStatCorrection = (typeof ARTIFACT_MAIN_STAT_OPTIONS)[number];
 
+const MAIN_STATS_BY_SLOT: Record<ArtifactSlotCorrection, readonly ArtifactMainStatCorrection[]> = {
+  flower: ["hp"],
+  plume: ["atk"],
+  sands: ["hp_", "atk_", "def_", "eleMas", "enerRech_"],
+  goblet: [
+    "hp_",
+    "atk_",
+    "def_",
+    "eleMas",
+    "pyro_dmg_",
+    "hydro_dmg_",
+    "electro_dmg_",
+    "cryo_dmg_",
+    "anemo_dmg_",
+    "geo_dmg_",
+    "dendro_dmg_",
+    "physical_dmg_"
+  ],
+  circlet: ["hp_", "atk_", "def_", "eleMas", "critRate_", "critDMG_", "heal_"]
+};
+
 export interface LevelCorrectionState {
   available: boolean;
   reason: string;
@@ -116,7 +137,7 @@ export function applyScannerCorrection(result: ScannerArtifactResult, correction
   const level = draft.level ?? corrections.level;
   const slotKey = draft.slotKey ?? corrections.slotKey;
   const mainStatKey = draft.mainStatKey ?? corrections.mainStatKey;
-  if (!isValidLevel(level) || !isValidSlot(slotKey) || !isValidMainStat(mainStatKey)) {
+  if (!isValidLevel(level) || !isValidSlot(slotKey) || !isValidMainStat(mainStatKey) || !isValidMainStatForSlot(slotKey, mainStatKey)) {
     return result;
   }
 
@@ -145,6 +166,10 @@ export function applyScannerCorrection(result: ScannerArtifactResult, correction
       ...(correction.needsMainStatKey ? { mainStatKey: 1 } : {})
     }
   };
+}
+
+export function getArtifactMainStatOptions(slotKey: ArtifactSlotCorrection): readonly ArtifactMainStatCorrection[] {
+  return MAIN_STATS_BY_SLOT[slotKey];
 }
 
 function unavailableCorrection(reason: string): ScannerCorrectionState {
@@ -181,4 +206,8 @@ function isValidSlot(value: unknown): value is ArtifactSlotCorrection {
 
 function isValidMainStat(value: unknown): value is ArtifactMainStatCorrection {
   return typeof value === "string" && ARTIFACT_MAIN_STAT_OPTIONS.includes(value as ArtifactMainStatCorrection);
+}
+
+function isValidMainStatForSlot(slotKey: ArtifactSlotCorrection, mainStatKey: ArtifactMainStatCorrection): boolean {
+  return MAIN_STATS_BY_SLOT[slotKey].includes(mainStatKey);
 }

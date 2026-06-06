@@ -26,7 +26,55 @@ $fixtures = @(
         ExpectSetKey = $null
     },
     @{
+        Name = "error_artifact_character_detail_2.png"
+        Region = $characterRegion
+        SlotKey = "sands"
+        MainStatKey = "atk_"
+        Level = 20
+        Rarity = 5
+        Substats = 4
+        ExpectSetKey = "ObsidianCodex"
+    },
+    @{
+        Name = "error_artifact_character_detail_3.png"
+        Region = $characterRegion
+        SlotKey = "sands"
+        MainStatKey = "eleMas"
+        Level = 20
+        Rarity = 5
+        Substats = 4
+        ExpectSetKey = "NoblesseOblige"
+        ExpectedSubstats = @(
+            @{ Key = "atk_"; Value = 5.8 },
+            @{ Key = "critDMG_"; Value = 35.8 },
+            @{ Key = "critRate_"; Value = 3.5 },
+            @{ Key = "enerRech_"; Value = 12.3 }
+        )
+    },
+    @{
+        Name = "error_artifact_character_detail_4.png"
+        Region = $characterRegion
+        SlotKey = "sands"
+        MainStatKey = "atk_"
+        Level = 0
+        Rarity = 5
+        Substats = 3
+        Unactivated = 1
+        ExpectSetKey = "ObsidianCodex"
+    },
+    @{
         Name = "error_artifact_bag_detail_1.png"
+        Region = $bagRegion
+        SlotKey = "flower"
+        MainStatKey = "hp"
+        Level = 0
+        Rarity = 5
+        Substats = 3
+        Unactivated = 1
+        ExpectSetKey = "DisenchantmentInDeepShadow"
+    },
+    @{
+        Name = "error_artifact_bag_detail_2.png"
         Region = $bagRegion
         SlotKey = "flower"
         MainStatKey = "hp"
@@ -104,6 +152,19 @@ foreach ($fixture in $fixtures) {
     }
     if ($result.artifact.substats.Count -ne $fixture.Substats) {
         throw "$($fixture.Name) substats expected $($fixture.Substats), got $($result.artifact.substats.Count)"
+    }
+    if ($fixture.ContainsKey("ExpectedSubstats")) {
+        $actualSubstats = @($result.artifact.substats)
+        for ($index = 0; $index -lt $fixture.ExpectedSubstats.Count; $index++) {
+            $expectedSubstat = $fixture.ExpectedSubstats[$index]
+            $actualSubstat = $actualSubstats[$index]
+            if ($actualSubstat.key -ne $expectedSubstat.Key) {
+                throw "$($fixture.Name) substat[$index] key expected $($expectedSubstat.Key), got $($actualSubstat.key)"
+            }
+            if ([Math]::Abs([double]$actualSubstat.value - [double]$expectedSubstat.Value) -gt 0.05) {
+                throw "$($fixture.Name) substat[$index] value expected $($expectedSubstat.Value), got $($actualSubstat.value)"
+            }
+        }
     }
     if ($fixture.ContainsKey("Unactivated") -and $result.artifact.unactivatedSubstats.Count -ne $fixture.Unactivated) {
         throw "$($fixture.Name) unactivated expected $($fixture.Unactivated), got $($result.artifact.unactivatedSubstats.Count)"

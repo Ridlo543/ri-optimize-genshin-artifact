@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { ScannerArtifactResult } from "@ri-genshin/artifact-schema";
-import { applyLevelCorrection, applyScannerCorrection, getLevelCorrectionState, getScannerCorrectionState } from "./scannerCorrection";
+import {
+  applyLevelCorrection,
+  applyScannerCorrection,
+  getArtifactMainStatOptions,
+  getLevelCorrectionState,
+  getScannerCorrectionState
+} from "./scannerCorrection";
 
 const missingLevelResult: ScannerArtifactResult = {
   source: "screen",
@@ -100,5 +106,27 @@ describe("scanner level correction", () => {
     expect(corrected.missingFields).toEqual([]);
     expect(corrected.confidence.slotKey).toBe(1);
     expect(corrected.confidence.mainStatKey).toBe(1);
+  });
+
+  it("only offers valid main stats for fixed-main-stat slots", () => {
+    expect(getArtifactMainStatOptions("flower")).toEqual(["hp"]);
+    expect(getArtifactMainStatOptions("plume")).toEqual(["atk"]);
+    expect(getArtifactMainStatOptions("sands")).toContain("enerRech_");
+    expect(getArtifactMainStatOptions("sands")).not.toContain("hp");
+  });
+
+  it("rejects a manual correction with an invalid slot and main-stat pair", () => {
+    const { mainStatKey: _mainStatKey, ...draftWithoutMainStat } = missingLevelResult.artifactDraft!;
+    const result: ScannerArtifactResult = {
+      ...missingLevelResult,
+      artifactDraft: draftWithoutMainStat,
+      missingFields: ["mainStatKey"],
+      error: "Region OCR missing required fields: mainStatKey."
+    };
+
+    const corrected = applyScannerCorrection(result, { mainStatKey: "hp_" });
+
+    expect(corrected.artifact).toBeNull();
+    expect(corrected.missingFields).toEqual(["mainStatKey"]);
   });
 });

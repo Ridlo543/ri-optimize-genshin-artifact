@@ -146,6 +146,13 @@
   - Manual OCR correction supports missing level, slot, and main stat.
   - `data/log-manual` screenshots are accepted as safe screenshot fixtures and covered by `pnpm scanner:manual-logs`.
   - Character artifact panels with wrapped long names use a merged crop fallback; bag/character manual logs no longer fail only because set OCR is unknown.
+- [x] Close the second manual OCR regression batch.
+  - Character panel classification now combines red-panel and beige-card evidence so borderline red panels do not fall into the bag profile.
+  - Long-title character panels use corrected level/substat crops; star-count OCR is no longer accepted as an artifact level unless a visible `+` is present.
+  - Short `Af`/`Hf`/`Df` OCR tokens can recover percentage main stats for Sands/Circlet, while Goblet remains strict to avoid elemental-stat ambiguity.
+  - Flower and Plume main stats are safely inferred as flat HP and flat ATK when their labels are unreadable.
+  - Manual correction only offers main stats valid for the selected slot and rejects impossible slot/main-stat combinations.
+  - `pnpm scanner:manual-logs` covers nine real screenshots, including `error_artifact_character_detail_2/3/4.png` and `error_artifact_bag_detail_2.png`.
 
 ## Next High Priority TODO
 
@@ -269,6 +276,10 @@
 - `data/log-manual/error_artifact_bag_detail_1.png`: bag detail regression for `DisenchantmentInDeepShadow` green set-line parsing.
 - `data/log-manual/success_artifact_bag_detail_1_level0.png`: bag detail +0 unactivated regression.
 - `data/log-manual/success_artifact_bag_detail_2_level20.png`: bag detail +20 partial set-name regression.
+- `data/log-manual/error_artifact_character_detail_2.png`: borderline red character panel regression; expected Obsidian Codex ATK% sands +20.
+- `data/log-manual/error_artifact_character_detail_3.png`: character Elemental Mastery sands regression; expected four active substats.
+- `data/log-manual/error_artifact_character_detail_4.png`: long artifact-name character regression; expected +0 with three active and one unactivated substat.
+- `data/log-manual/error_artifact_bag_detail_2.png`: bag Flower regression; expected flat HP main stat and non-blocking set metadata.
 
 ## Automated Follow-Up Tests
 

@@ -75,7 +75,28 @@ internal sealed class ArtifactOcrService(OcrTextReader reader)
     public OcrFieldResult<string> ReadMainStatKey(Bitmap source, string? slotKey, string? imagePath = null, bool writeDebugImage = false)
     {
         OcrFieldResult<string> text = ReadTextField(source, "mainStatKey", PageSegMode.SingleLine, imagePath, writeDebugImage);
-        return ParseMainStatKey(text, slotKey);
+        OcrFieldResult<string> parsed = ParseMainStatKey(text, slotKey);
+        if (!string.IsNullOrWhiteSpace(parsed.Value))
+        {
+            return parsed;
+        }
+
+        OcrFieldResult<string> fallbackText = ReadTextField(source, "mainStatKey-fallback", PageSegMode.SingleWord, imagePath, writeDebugImage);
+        OcrFieldResult<string> fallback = ParseMainStatKey(fallbackText, slotKey);
+        if (!string.IsNullOrWhiteSpace(fallback.Value))
+        {
+            return fallback;
+        }
+
+        return new OcrFieldResult<string>
+        {
+            Field = "mainStatKey",
+            Value = null,
+            RawText = string.Join(" | ", new[] { text.RawText, fallbackText.RawText }.Where(value => !string.IsNullOrWhiteSpace(value))),
+            Confidence = 0,
+            ImagePath = imagePath is null ? null : Path.GetFullPath(imagePath),
+            DebugImagePath = fallbackText.DebugImagePath ?? text.DebugImagePath
+        };
     }
 
     public OcrFieldResult<int> ReadLevel(string imagePath, bool writeDebugImage = false)

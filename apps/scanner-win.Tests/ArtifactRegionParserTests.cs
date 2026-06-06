@@ -310,6 +310,93 @@ public sealed class ArtifactRegionParserTests
     }
 
     [TestMethod]
+    public void ParseFile_ManualCharacterBorderlineRedPanelReadsArtifact()
+    {
+        using OcrTextReader reader = new();
+        ArtifactOcrService service = new(reader);
+        ArtifactRegionParser parser = new(service);
+
+        ScanResult result = parser.ParseFile(ScannerPaths.FindScreenshotFixture("error_artifact_character_detail_2.png"), CharacterPanelRegion);
+
+        result.Error.Should().BeNull();
+        result.Capture.Layout.Should().StartWith("roi-character-panel");
+        result.Artifact.Should().NotBeNull();
+        GoodArtifact artifact = result.Artifact!;
+        artifact.SetKey.Should().Be("ObsidianCodex");
+        artifact.SlotKey.Should().Be("sands");
+        artifact.MainStatKey.Should().Be("atk_");
+        artifact.Level.Should().Be(20);
+        artifact.Substats.Should().HaveCount(4);
+    }
+
+    [TestMethod]
+    public void ParseFile_ManualCharacterElementalMasteryReadsFourSubstats()
+    {
+        using OcrTextReader reader = new();
+        ArtifactOcrService service = new(reader);
+        ArtifactRegionParser parser = new(service);
+
+        ScanResult result = parser.ParseFile(ScannerPaths.FindScreenshotFixture("error_artifact_character_detail_3.png"), CharacterPanelRegion);
+
+        result.Error.Should().BeNull();
+        result.Artifact.Should().NotBeNull();
+        GoodArtifact artifact = result.Artifact!;
+        artifact.SetKey.Should().Be("NoblesseOblige");
+        artifact.SlotKey.Should().Be("sands");
+        artifact.MainStatKey.Should().Be("eleMas");
+        artifact.Level.Should().Be(20);
+        artifact.Substats.Should().BeEquivalentTo(new[]
+        {
+            new GoodSubstat { Key = "atk_", Value = 5.8m },
+            new GoodSubstat { Key = "critDMG_", Value = 35.8m },
+            new GoodSubstat { Key = "critRate_", Value = 3.5m },
+            new GoodSubstat { Key = "enerRech_", Value = 12.3m }
+        }, options => options.WithStrictOrdering());
+    }
+
+    [TestMethod]
+    public void ParseFile_ManualCharacterLongTitleDoesNotReadStarCountAsLevel()
+    {
+        using OcrTextReader reader = new();
+        ArtifactOcrService service = new(reader);
+        ArtifactRegionParser parser = new(service);
+
+        ScanResult result = parser.ParseFile(ScannerPaths.FindScreenshotFixture("error_artifact_character_detail_4.png"), CharacterPanelRegion);
+
+        result.Error.Should().BeNull();
+        result.Artifact.Should().NotBeNull();
+        GoodArtifact artifact = result.Artifact!;
+        artifact.SetKey.Should().Be("ObsidianCodex");
+        artifact.SlotKey.Should().Be("sands");
+        artifact.MainStatKey.Should().Be("atk_");
+        artifact.Level.Should().Be(0);
+        artifact.Substats.Should().HaveCount(3);
+        artifact.UnactivatedSubstats.Should().ContainSingle()
+            .Which.Should().BeEquivalentTo(new GoodSubstat { Key = "def", Value = 21m });
+    }
+
+    [TestMethod]
+    public void ParseFile_ManualBagFlowerKeepsFlatHpMainStat()
+    {
+        using OcrTextReader reader = new();
+        ArtifactOcrService service = new(reader);
+        ArtifactRegionParser parser = new(service);
+
+        ScanResult result = parser.ParseFile(ScannerPaths.FindScreenshotFixture("error_artifact_bag_detail_2.png"), BagCardRegion);
+
+        result.Error.Should().BeNull();
+        result.Artifact.Should().NotBeNull();
+        GoodArtifact artifact = result.Artifact!;
+        artifact.SetKey.Should().Be("DisenchantmentInDeepShadow");
+        artifact.SlotKey.Should().Be("flower");
+        artifact.MainStatKey.Should().Be("hp");
+        artifact.Level.Should().Be(0);
+        artifact.Substats.Should().HaveCount(3);
+        artifact.UnactivatedSubstats.Should().ContainSingle()
+            .Which.Should().BeEquivalentTo(new GoodSubstat { Key = "critDMG_", Value = 7.0m });
+    }
+
+    [TestMethod]
     public void ParseBitmap_RecordsOcclusionAvoidedFlag()
     {
         using OcrTextReader reader = new();

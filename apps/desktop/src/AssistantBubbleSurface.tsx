@@ -2,7 +2,7 @@ import { CSSProperties, KeyboardEvent, PointerEvent, useRef } from "react";
 import { Eye, Gem, GripVertical, List, Maximize2, Minus, Power, RotateCcw, ScanLine, SlidersHorizontal, Square } from "lucide-react";
 import { AssistantSummary } from "./assistantSummary";
 import { InfoTooltip } from "./InfoTooltip";
-import { ARTIFACT_LEVEL_OPTIONS, ARTIFACT_MAIN_STAT_OPTIONS, ARTIFACT_SLOT_OPTIONS, ArtifactMainStatCorrection, ArtifactSlotCorrection } from "./scannerCorrection";
+import { ARTIFACT_LEVEL_OPTIONS, ARTIFACT_SLOT_OPTIONS, ArtifactMainStatCorrection, ArtifactSlotCorrection, getArtifactMainStatOptions } from "./scannerCorrection";
 
 export interface AssistantLevelCorrection {
   available: boolean;
@@ -124,7 +124,7 @@ export function AssistantBubbleSurface({
             <label>
               <span>Main</span>
               <select value={levelCorrection.mainStatKey} onChange={(event) => levelCorrection.onMainStatKeyChange(event.target.value as ArtifactMainStatCorrection)}>
-                {ARTIFACT_MAIN_STAT_OPTIONS.map((stat) => (
+                {getArtifactMainStatOptions(levelCorrection.slotKey).map((stat) => (
                   <option key={stat} value={stat}>
                     {statLabel(stat)}
                   </option>

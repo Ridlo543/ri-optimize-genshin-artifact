@@ -22,7 +22,7 @@
 - ROI fixture tests cover bag-card and character-panel regions through `ArtifactRegionParserTests`.
 - Region parser regression tests cover Royal Flora 5-star rarity, level OCR normalization, and the `artifactDraft`/`missingFields` path when only level is missing.
 - Set resolver tests cover `Disenchantment in Deep Shadow`, artifact-item-name fallback, and unknown-set non-blocking warnings.
-- Manual-log regression tests cover real user screenshots in `data/log-manual`, including wrapped character artifact names, unknown set names, bag detail +0/+20 cases, and partial green set-name OCR.
+- Manual-log regression tests cover nine real user screenshots in `data/log-manual`, including borderline red character panels, wrapped artifact names, long-title crops, unknown set names, bag detail +0/+20 cases, and partial green set-name OCR.
 - `parse-region-fixture <fixtureFileName> <regionJson>` verifies a normalized ROI against curated screenshot fixtures.
 - `parse-region-fixture` accepts safe fixture file names from `data/fixtures/screenshots`, `data/example/picture`, and `data/log-manual`.
 - `pnpm scanner:regions` parses the seven fixture playground ROI examples: character +20, character unactivated, bag +20, Royal Flora unactivated, Instructor 4-star, Traveling Doctor 3-star, and Adventurer 2-star.
@@ -68,6 +68,7 @@
 - Confirm `logs/scanner/region-last.png` matches the artifact panel and `capture.scanId` points to a non-overwritten snapshot under `logs/scanner/captures/`.
 - If OCR misses only `level`, confirm the bubble/main panel shows `Review Level`, choose `+0..+20`, and verify the recommendation appears after applying correction.
 - If OCR misses `slotKey` or `mainStatKey`, confirm the bubble/main panel shows `Review Slot`, `Review Main Stat`, or `Review OCR`, then choose the visible value and verify the recommendation appears after applying correction.
+- Confirm manual main-stat correction only offers values valid for the selected slot. Flower must use flat HP and Plume must use flat ATK.
 - Confirm metric info icons show a tooltip on mouse hover and keyboard focus.
 - Confirm `capture.occlusionAvoided=true` for native live scans from Tauri; this means assistant/main windows were hidden before screen capture.
 - Toggle `Watch`, change selected artifact in game, and confirm OCR only refreshes when `capture.regionHash` changes.
