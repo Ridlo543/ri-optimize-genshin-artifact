@@ -69,18 +69,25 @@ internal sealed class ScreenshotArtifactParser(ArtifactOcrService ocrService)
         OcrFieldResult<string> slot = ocrService.ReadSlotKey(crops.Slot, writeDebugImage: writeDebugImage);
         OcrFieldResult<string> mainStat = ocrService.ReadMainStatKey(crops.MainStat, slot.Value, writeDebugImage: writeDebugImage);
         OcrFieldResult<int> level = ocrService.ReadLevel(crops.Level, writeDebugImage: writeDebugImage);
-        OcrFieldResult<string> setKey = ocrService.ReadSetKey(crops.Name, writeDebugImage: writeDebugImage);
+        OcrFieldResult<string> itemNameSetKey = ocrService.ReadSetKey(crops.Name, writeDebugImage: writeDebugImage);
         OcrFieldResult<bool> locked = ArtifactVisualClassifier.ReadLock(crops.Lock);
         OcrFieldResult<string> location = ocrService.ReadLocation(crops.Equipped, writeDebugImage: writeDebugImage);
         OcrSubstatsResult substats = ocrService.ReadSubstats(crops.Substats, writeDebugImage: writeDebugImage);
+        ArtifactSetResolution setResolution = ArtifactSetResolver.Resolve(itemNameSetKey, substats);
+        OcrFieldResult<string> setKey = setResolution.Field;
 
-        List<string> missingFields = FindMissingFields(setKey, slot, mainStat, level, substats);
+        int rarity = ArtifactVisualClassifier.EstimateRarity(crops.Name);
+        double substatsConfidence = rarity == 2 && level.Value == 0 && substats.Substats.Count == 0
+            ? 0.9
+            : substats.Confidence;
+        GoodArtifactDraft artifactDraft = CreateArtifactDraft(setKey, slot, mainStat, level, substats, locked, location, rarity);
+        List<string> missingFields = FindMissingFields(slot, mainStat, level, substats, rarity);
         GoodArtifact? artifact = missingFields.Count == 0
             ? new GoodArtifact
             {
                 SetKey = setKey.Value,
                 SlotKey = slot.Value ?? string.Empty,
-                Rarity = EstimateRarity(crops.Name),
+                Rarity = rarity,
                 Level = level.Value,
                 MainStatKey = mainStat.Value ?? string.Empty,
                 Substats = substats.Substats,
@@ -100,12 +107,15 @@ internal sealed class ScreenshotArtifactParser(ArtifactOcrService ocrService)
                 SlotKey = slot.Confidence,
                 MainStatKey = mainStat.Confidence,
                 Level = level.Confidence,
-                Substats = substats.Confidence,
+                Substats = substatsConfidence,
                 Lock = locked.Confidence,
                 Equipped = string.IsNullOrWhiteSpace(location.Value) ? 0.75 : location.Confidence,
                 Location = location.Confidence
             },
             Artifact = artifact,
+            ArtifactDraft = artifactDraft,
+            MissingFields = missingFields,
+            OptionalWarnings = setResolution.Warnings,
             ScreenState = screenState,
             Capture = new CaptureInfo
             {
@@ -120,7 +130,8 @@ internal sealed class ScreenshotArtifactParser(ArtifactOcrService ocrService)
             {
                 ScreenshotPath = screenshotPath,
                 RawText = BuildRawText(setKey, slot, mainStat, level, location, substats),
-                CropRectangles = crops.Rectangles
+                CropRectangles = crops.Rectangles,
+                SetIdentity = setResolution.Diagnostics
             },
             Error = missingFields.Count == 0 ? null : $"Screenshot OCR missing required fields: {string.Join(", ", missingFields)}."
         };
@@ -255,17 +266,13 @@ internal sealed class ScreenshotArtifactParser(ArtifactOcrService ocrService)
     }
 
     private static List<string> FindMissingFields(
-        OcrFieldResult<string> setKey,
         OcrFieldResult<string> slot,
         OcrFieldResult<string> mainStat,
         OcrFieldResult<int> level,
-        OcrSubstatsResult substats)
+        OcrSubstatsResult substats,
+        int rarity)
     {
         List<string> missing = [];
-        if (string.IsNullOrWhiteSpace(setKey.Value))
-        {
-            missing.Add("setKey");
-        }
         if (string.IsNullOrWhiteSpace(slot.Value))
         {
             missing.Add("slotKey");
@@ -278,7 +285,7 @@ internal sealed class ScreenshotArtifactParser(ArtifactOcrService ocrService)
         {
             missing.Add("level");
         }
-        if (substats.Substats.Count == 0)
+        if (rarity > 2 && substats.Substats.Count == 0)
         {
             missing.Add("substats");
         }
@@ -286,9 +293,28 @@ internal sealed class ScreenshotArtifactParser(ArtifactOcrService ocrService)
         return missing;
     }
 
-    private static int EstimateRarity(Bitmap nameCrop)
+    private static GoodArtifactDraft CreateArtifactDraft(
+        OcrFieldResult<string> setKey,
+        OcrFieldResult<string> slot,
+        OcrFieldResult<string> mainStat,
+        OcrFieldResult<int> level,
+        OcrSubstatsResult substats,
+        OcrFieldResult<bool> locked,
+        OcrFieldResult<string> location,
+        int rarity)
     {
-        return PurpleRatio(nameCrop) > 0.12 ? 4 : 5;
+        return new GoodArtifactDraft
+        {
+            SetKey = string.IsNullOrWhiteSpace(setKey.Value) ? null : setKey.Value,
+            SlotKey = string.IsNullOrWhiteSpace(slot.Value) ? null : slot.Value,
+            Rarity = rarity,
+            Level = level.Value >= 0 ? level.Value : null,
+            MainStatKey = string.IsNullOrWhiteSpace(mainStat.Value) ? null : mainStat.Value,
+            Substats = substats.Substats,
+            UnactivatedSubstats = substats.UnactivatedSubstats,
+            Lock = locked.Value,
+            Location = location.Value ?? string.Empty
+        };
     }
 
     private static Dictionary<string, string> BuildRawText(
@@ -316,44 +342,6 @@ internal sealed class ScreenshotArtifactParser(ArtifactOcrService ocrService)
         string outputPath = Path.Combine("logs", "scanner", "debug", $"{fieldName}.png");
         image.Save(outputPath, ImageFormat.Png);
         return Path.GetFullPath(outputPath);
-    }
-
-    private static double OrangeRatio(Bitmap image)
-    {
-        int orange = 0;
-        int total = image.Width * image.Height;
-        for (int y = 0; y < image.Height; y++)
-        {
-            for (int x = 0; x < image.Width; x++)
-            {
-                Color pixel = image.GetPixel(x, y);
-                if (pixel.R > 140 && pixel.G is > 65 and < 150 && pixel.B < 90)
-                {
-                    orange++;
-                }
-            }
-        }
-
-        return total == 0 ? 0 : orange / (double)total;
-    }
-
-    private static double PurpleRatio(Bitmap image)
-    {
-        int purple = 0;
-        int total = image.Width * image.Height;
-        for (int y = 0; y < image.Height; y++)
-        {
-            for (int x = 0; x < image.Width; x++)
-            {
-                Color pixel = image.GetPixel(x, y);
-                if (pixel.R > 110 && pixel.B > 120 && pixel.G < 120)
-                {
-                    purple++;
-                }
-            }
-        }
-
-        return total == 0 ? 0 : purple / (double)total;
     }
 
     private static RectangleF RectFromCard(float x, float y, float width, float height)

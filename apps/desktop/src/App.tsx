@@ -1,5 +1,6 @@
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Activity, Eye, FileJson, Image as ImageIcon, Pin, ScanLine, SlidersHorizontal, Square, Zap } from "lucide-react";
+import { invoke, isTauri } from "@tauri-apps/api/core";
+import { Activity, Eye, FileJson, Image as ImageIcon, Keyboard, Pin, ScanLine, SlidersHorizontal, Square } from "lucide-react";
 import {
   extractGoodArtifacts,
   GoodArtifact,
@@ -12,11 +13,25 @@ import {
   ScannerScreenState
 } from "@ri-genshin/artifact-schema";
 import { BatchEvaluationResult, DEFAULT_PROFILES, evaluateArtifactExact, evaluateGoodArtifactBatch, ProbabilityResult } from "@ri-genshin/probability-core";
-import { loadScanRegion, saveLatestScannerResult, saveRoiEditMode, saveRoiOpacity } from "./roi";
-import { SAMPLE_SCAN_RESULT } from "./sample";
+import { enableMainInput, lockRoiEditor, openRoiEditor } from "./nativeWindows";
+import { loadLatestScannerResult, loadScanRegion, saveLatestScannerResult } from "./roi";
+import { IDLE_SCAN_RESULT, SAMPLE_SCAN_RESULT } from "./sample";
 import { classifyRegionArtifact, parseScreenshotFixture, scanRegionArtifact, scannerStatus, ScannerStatus } from "./scanner";
+import {
+  applyScannerCorrection,
+  ARTIFACT_LEVEL_OPTIONS,
+  ARTIFACT_MAIN_STAT_OPTIONS,
+  ARTIFACT_SLOT_OPTIONS,
+  ArtifactMainStatCorrection,
+  ArtifactSlotCorrection,
+  getScannerCorrectionState
+} from "./scannerCorrection";
+import { loadEvaluationProfile, saveEvaluationProfile } from "./evaluationProfile";
+import { InfoTooltip } from "./InfoTooltip";
+import { useSharedWatchState } from "./assistantRuntimeState";
 
 const confidenceKeys = ["setKey", "slotKey", "mainStatKey", "level", "substats", "lock", "equipped"] as const;
+const requiredConfidenceKeys = ["slotKey", "mainStatKey", "level", "substats"] as const;
 const screenshotFixtures = [
   { label: "Bag +20", value: "bag-inventory-raw-1920x1200.png" },
   { label: "Equipped +20", value: "artifact-inventory-plus20.jpg" },
@@ -51,12 +66,16 @@ type InputEvaluation =
 
 export function App() {
   const [status, setStatus] = useState<ScannerStatus | null>(null);
-  const [artifactJson, setArtifactJson] = useState(formatArtifactJson(SAMPLE_SCAN_RESULT));
-  const [profileId, setProfileId] = useState(DEFAULT_PROFILES[0].id);
+  const [artifactJson, setArtifactJson] = useState(formatArtifactJson(IDLE_SCAN_RESULT));
+  const [profileId, setProfileId] = useState(() => loadEvaluationProfile().id);
   const [screenshotFixture, setScreenshotFixture] = useState<ScreenshotFixtureName>(screenshotFixtures[0].value);
   const [busy, setBusy] = useState(false);
-  const [watching, setWatching] = useState(false);
-  const [message, setMessage] = useState("Fixture loaded. Set ROI on the artifact card, then scan.");
+  const [watching, setWatching] = useSharedWatchState();
+  const [debugToolsOpen, setDebugToolsOpen] = useState(false);
+  const [manualLevel, setManualLevel] = useState(0);
+  const [manualSlotKey, setManualSlotKey] = useState<ArtifactSlotCorrection>("flower");
+  const [manualMainStatKey, setManualMainStatKey] = useState<ArtifactMainStatCorrection>("hp");
+  const [message, setMessage] = useState("No analysis has run yet. Open Genshin, set the ROI, then click Analyze.");
   const busyRef = useRef(false);
   const watchPollingRef = useRef(false);
   const lastScannedHashRef = useRef<string | null>(null);
@@ -66,6 +85,7 @@ export function App() {
   const evaluation = useMemo(() => evaluateJsonInput(artifactJson, profile), [artifactJson, profile]);
   const scannerResult = useMemo(() => parseScannerResult(artifactJson), [artifactJson]);
   const screenState = scannerResult?.screenState;
+  const correction = useMemo(() => getScannerCorrectionState(scannerResult), [scannerResult]);
 
   useEffect(() => {
     void refreshStatus();
@@ -74,6 +94,16 @@ export function App() {
   useEffect(() => {
     if (!watching) {
       return undefined;
+    }
+    if (isTauri()) {
+      const id = window.setInterval(() => {
+        const latest = loadLatestScannerResult();
+        if (latest) {
+          setArtifactJson(formatArtifactJson(latest));
+          setMessage(formatScannerMessage(latest, "Watch updated."));
+        }
+      }, 700);
+      return () => window.clearInterval(id);
     }
     let ignore = false;
     const tick = () => {
@@ -100,6 +130,23 @@ export function App() {
     }
   }
 
+  async function openFixturePlayground() {
+    try {
+      await invoke("show_fixture_playground");
+    } catch {
+      window.open("?window=fixture-playground&fixture=character-plus20", "_blank", "noopener,noreferrer");
+    }
+  }
+
+  async function handleEnableInput() {
+    try {
+      await enableMainInput();
+      setMessage("Keyboard input enabled.");
+    } catch (caught) {
+      setMessage(caught instanceof Error ? caught.message : "Unable to enable keyboard input.");
+    }
+  }
+
   async function handleScan(silent = false) {
     if (busyRef.current) {
       return;
@@ -110,16 +157,16 @@ export function App() {
       setMessage("Scanning artifact ROI...");
     }
     try {
-      const result = await scanRegionArtifact(loadScanRegion());
+      await lockRoiEditor().catch(() => undefined);
+      const result = await scanRegionArtifact(loadScanRegion(), { occlusionAvoided: true });
       if (result.capture.regionHash) {
         lastScannedHashRef.current = result.capture.regionHash;
       }
       setArtifactJson(formatArtifactJson(result));
       saveLatestScannerResult(result);
       setMessage(formatScannerMessage(result, "Scan complete."));
-    } catch {
-      setArtifactJson(formatArtifactJson(SAMPLE_SCAN_RESULT));
-      setMessage("Scanner unavailable; fixture result loaded for UI/core development.");
+    } catch (caught) {
+      setMessage(caught instanceof Error ? caught.message : "Scanner unavailable.");
     } finally {
       busyRef.current = false;
       setBusy(false);
@@ -161,10 +208,30 @@ export function App() {
     setMessage("Fixture result loaded.");
   }
 
-  function handleEditRoi() {
-    saveRoiEditMode(true);
-    saveRoiOpacity("visible");
-    setMessage("ROI edit mode enabled. Move or resize the red box, then lock it.");
+  function applyManualCorrection() {
+    if (!scannerResult || !correction.available) {
+      return;
+    }
+
+    const corrected = applyScannerCorrection(scannerResult, {
+      level: manualLevel,
+      slotKey: manualSlotKey,
+      mainStatKey: manualMainStatKey
+    });
+    setArtifactJson(formatArtifactJson(corrected));
+    saveLatestScannerResult(corrected);
+    setMessage("Manual OCR correction applied.");
+  }
+
+  async function handleEditRoi() {
+    try {
+      const next = status?.available ? status : await scannerStatus();
+      setStatus(next);
+      await openRoiEditor(next);
+      setMessage("ROI edit mode enabled. Move or resize the red box, then lock it.");
+    } catch (caught) {
+      setMessage(caught instanceof Error ? caught.message : "Unable to open ROI editor.");
+    }
   }
 
   async function handleScreenshotFixture() {
@@ -203,61 +270,87 @@ export function App() {
     event.target.value = "";
   }
 
-  const confidenceLow = confidenceKeys.some((key) => {
+  const confidenceLow = requiredConfidenceKeys.some((key) => {
     const value = evaluation.confidence[key];
     return value !== undefined && value < 0.85;
   });
 
   return (
     <main className="shell">
-      <header className="titlebar" data-tauri-drag-region>
-        <div className="titlebar__brand" data-tauri-drag-region>
-          <Zap size={16} />
-          <span>Artifact Assistant</span>
-        </div>
-        <div className="titlebar__status" title={status?.error ?? status?.windowTitle ?? "Scanner status"}>
-          <span className={status?.available ? "dot dot--ok" : "dot"} />
-          {status?.available ? status.resolution : "scanner idle"}
-        </div>
-      </header>
-
       <section className="toolbar">
         <button className="primary" onClick={() => void handleScan()} disabled={busy}>
           <ScanLine size={16} />
-          {busy ? "Scanning" : "Scan"}
+          {busy ? "Analyzing" : "Analyze"}
         </button>
         <button onClick={() => setWatching((value) => !value)}>
           {watching ? <Square size={16} /> : <Eye size={16} />}
           {watching ? "Stop" : "Watch"}
         </button>
-        <button onClick={handleEditRoi}>
+        <button onClick={() => void handleEditRoi()}>
           <SlidersHorizontal size={16} />
           Edit ROI
         </button>
-        <button onClick={loadFixture}>
-          <Activity size={16} />
-          Fixture
-        </button>
-        <select className="fixture-select" value={screenshotFixture} onChange={(event) => setScreenshotFixture(toScreenshotFixtureName(event.target.value))} disabled={busy}>
-          {screenshotFixtures.map((fixture) => (
-            <option key={fixture.value} value={fixture.value}>
-              {fixture.label}
-            </option>
-          ))}
-        </select>
-        <button onClick={() => void handleScreenshotFixture()} disabled={busy}>
-          <ImageIcon size={16} />
-          OCR
-        </button>
-        <label className="file-button">
-          <FileJson size={16} />
-          Import
-          <input type="file" accept=".json,application/json" onChange={(event) => void handleFileImport(event)} />
+        <label className="profile-control" title={profile.description}>
+          <span>Evaluation profile</span>
+          <select
+            value={profileId}
+            onChange={(event) => {
+              setProfileId(event.target.value);
+              saveEvaluationProfile(event.target.value);
+            }}
+          >
+            {DEFAULT_PROFILES.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
+              </option>
+            ))}
+          </select>
         </label>
-        <button onClick={() => void refreshStatus()} title="Refresh scanner status">
-          <Pin size={16} />
+        <button className="icon-button" onClick={() => setDebugToolsOpen((value) => !value)} aria-expanded={debugToolsOpen} title="Developer tools" aria-label="Developer tools">
+          <Activity size={16} />
         </button>
+        <span className="toolbar__status" title={status?.error ?? status?.windowTitle ?? "Scanner status"}>
+          <span className={status?.available ? "dot dot--ok" : "dot"} />
+          {status?.available ? status.resolution : "scanner idle"}
+        </span>
       </section>
+
+      {debugToolsOpen ? (
+        <section className="toolbar toolbar--debug" aria-label="Fixture and OCR debug tools">
+          <button onClick={loadFixture}>
+            <Activity size={16} />
+            Fixture
+          </button>
+          <select className="fixture-select" value={screenshotFixture} onChange={(event) => setScreenshotFixture(toScreenshotFixtureName(event.target.value))} disabled={busy}>
+            {screenshotFixtures.map((fixture) => (
+              <option key={fixture.value} value={fixture.value}>
+                {fixture.label}
+              </option>
+            ))}
+          </select>
+          <button onClick={() => void handleScreenshotFixture()} disabled={busy}>
+            <ImageIcon size={16} />
+            OCR
+          </button>
+          <button onClick={() => void openFixturePlayground()}>
+            <ImageIcon size={16} />
+            Playground
+          </button>
+          <label className="file-button">
+            <FileJson size={16} />
+            Import JSON
+            <input type="file" accept=".json,application/json" onChange={(event) => void handleFileImport(event)} />
+          </label>
+          <button onClick={() => void refreshStatus()} title="Refresh scanner status">
+            <Pin size={16} />
+            Refresh status
+          </button>
+          <button onClick={() => void handleEnableInput()} title="Enable keyboard input. Exclusive fullscreen may minimize.">
+            <Keyboard size={16} />
+            Enable input
+          </button>
+        </section>
+      ) : null}
 
       <p className="message">{message}</p>
       {screenState ? (
@@ -272,21 +365,35 @@ export function App() {
         </section>
       ) : null}
 
-      <section className="grid">
+      <section className={`grid ${debugToolsOpen ? "" : "grid--single"}`}>
         <article className="panel result-panel">
           <div className="panel__header">
             <span>Decision</span>
-            {confidenceLow ? <small className="warn">review OCR</small> : <small>{evaluation.kind === "batch" ? "batch" : "ready"}</small>}
+            {confidenceLow ? (
+              <small className="warn">review OCR</small>
+            ) : (
+              <small>{evaluation.kind === "batch" ? "batch" : evaluation.kind === "error" ? "waiting" : "ready"}</small>
+            )}
           </div>
           {evaluation.kind === "single" ? (
             <>
+              {scannerResult?.artifact ? <p className="artifact-facts">{formatArtifactFacts(scannerResult.artifact)}</p> : null}
               <h1>{evaluation.result.recommendation.title}</h1>
               <div className="metrics">
-                <Metric label="Current CV" value={evaluation.result.currentCV.toFixed(1)} />
-                <Metric label="Expected CV" value={evaluation.result.expectedFinalCV.toFixed(1)} />
-                <Metric label="Expected score" value={evaluation.result.expectedFinalScore.toFixed(1)} />
-                <Metric label="P >= 30 score" value={formatPercent(evaluation.result.probabilityReachScoreThreshold[30] ?? 0)} />
+                <Metric label="Active Crit Value" value={evaluation.result.activeCritValue.toFixed(1)} help="CRIT Rate x 2 + CRIT DMG currently active." />
+                <Metric label="Known Crit Value" value={evaluation.result.knownCritValue.toFixed(1)} help="Includes a visible unactivated stat because it is guaranteed to unlock." />
+                <Metric label="Expected Crit Value at Max" value={evaluation.result.expectedFinalCritValue.toFixed(1)} help="Probability-weighted average Crit Value at this artifact rarity's maximum level." />
+                <Metric label="Useful Roll Value" value={evaluation.result.usefulRollValue.toFixed(1)} help={`Normalized useful rolls for the ${evaluation.result.profileContext.name} profile.`} />
+                <Metric
+                  label="Chance to Reach Target"
+                  value={formatPercent(evaluation.result.probabilityReachProfileTarget)}
+                  help={`Exact chance to reach ${evaluation.result.profileContext.targetUsefulRollValue.toFixed(1)} Useful Roll Value for ${evaluation.result.profileContext.name}.`}
+                />
+                <Metric label="OCR Confidence" value={formatRequiredConfidence(evaluation.confidence)} help="How confidently the scanner read required fields. This is not artifact quality." />
               </div>
+              <p className="profile-note">
+                Evaluated for <b>{evaluation.result.profileContext.name}</b>. Main stat fit: {evaluation.result.profileContext.mainStatFit.replaceAll("-", " ")}. Set fit: not evaluated.
+              </p>
               <div className="probability">
                 {Object.entries(evaluation.result.probabilityByTargetRollCount).map(([rolls, probability]) => (
                   <div key={rolls}>
@@ -329,7 +436,56 @@ export function App() {
               ) : null}
             </>
           ) : (
-            <p className="error">{evaluation.error}</p>
+            <>
+              {correction.available ? (
+                <div className="level-correction">
+                  <div>
+                    <b>{correctionTitle(correction.missingFields)}</b>
+                    <span>{correction.reason}</span>
+                  </div>
+                  {correction.needsSlotKey ? (
+                    <label>
+                      Slot
+                      <select value={manualSlotKey} onChange={(event) => setManualSlotKey(event.target.value as ArtifactSlotCorrection)}>
+                        {ARTIFACT_SLOT_OPTIONS.map((slot) => (
+                          <option key={slot} value={slot}>
+                            {friendlySlot(slot)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
+                  {correction.needsMainStatKey ? (
+                    <label>
+                      Main
+                      <select value={manualMainStatKey} onChange={(event) => setManualMainStatKey(event.target.value as ArtifactMainStatCorrection)}>
+                        {ARTIFACT_MAIN_STAT_OPTIONS.map((stat) => (
+                          <option key={stat} value={stat}>
+                            {friendlyStat(stat)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
+                  {correction.needsLevel ? (
+                    <label>
+                      Level
+                      <select value={manualLevel} onChange={(event) => setManualLevel(Number(event.target.value))}>
+                        {ARTIFACT_LEVEL_OPTIONS.map((level) => (
+                          <option key={level} value={level}>
+                            +{level}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
+                  <button className="primary" onClick={applyManualCorrection}>
+                    Apply
+                  </button>
+                </div>
+              ) : null}
+              <p className="error">{evaluation.error}</p>
+            </>
           )}
           {evaluation.warnings.length > 0 ? (
             <ul className="warnings">
@@ -340,18 +496,12 @@ export function App() {
           ) : null}
         </article>
 
-        <article className="panel">
-          <div className="panel__header">
-            <span>Profile</span>
-          </div>
-          <select value={profileId} onChange={(event) => setProfileId(event.target.value)}>
-            {DEFAULT_PROFILES.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-
+        {debugToolsOpen ? (
+          <article className="panel">
+            <div className="panel__header">
+              <span>OCR Diagnostics</span>
+              <small>not artifact quality</small>
+            </div>
           <div className="confidence">
             {confidenceKeys.map((key) => (
               <div key={key}>
@@ -361,27 +511,63 @@ export function App() {
               </div>
             ))}
           </div>
-        </article>
+          </article>
+        ) : null}
       </section>
 
-      <section className="panel json-panel">
+      {debugToolsOpen ? <section className="panel json-panel">
         <div className="panel__header">
           <span>Scanner JSON</span>
           <small>manual correction is live</small>
         </div>
         <textarea value={artifactJson} onChange={(event) => setArtifactJson(event.target.value)} spellCheck={false} />
-      </section>
+      </section> : null}
     </main>
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+function Metric({ label, value, help = label }: { label: string; value: string; help?: string }) {
   return (
     <div className="metric">
-      <span>{label}</span>
+      <span>
+        {label}
+        <InfoTooltip label={label} content={help} />
+      </span>
       <b>{value}</b>
     </div>
   );
+}
+
+function formatRequiredConfidence(confidence: ScanConfidence): string {
+  const values = requiredConfidenceKeys
+    .map((key) => confidence[key])
+    .filter((value): value is number => typeof value === "number");
+  return values.length === 0 ? "n/a" : formatPercent(Math.min(...values));
+}
+
+function formatArtifactFacts(artifact: GoodArtifact): string {
+  const guaranteed = artifact.unactivatedSubstats?.length ?? 0;
+  return `${artifact.rarity}-star ${friendlySlot(artifact.slotKey)} · ${friendlyStat(artifact.mainStatKey)} · +${artifact.level} · ${artifact.substats.length} active${guaranteed ? ` + ${guaranteed} guaranteed` : ""}`;
+}
+
+function friendlySlot(value: string): string {
+  return ({ flower: "Flower", plume: "Plume", sands: "Sands", goblet: "Goblet", circlet: "Circlet" } as Record<string, string>)[value] ?? value;
+}
+
+function friendlyStat(value: string): string {
+  return (
+    {
+      hp: "HP",
+      atk: "ATK",
+      hp_: "HP%",
+      atk_: "ATK%",
+      def_: "DEF%",
+      eleMas: "Elemental Mastery",
+      enerRech_: "Energy Recharge",
+      critRate_: "CRIT Rate",
+      critDMG_: "CRIT DMG"
+    } as Record<string, string>
+  )[value] ?? value;
 }
 
 function formatPercent(value: number): string {
@@ -428,6 +614,19 @@ function screenStateLabel(screenState: ScannerScreenState): string {
     default:
       return "Screen State";
   }
+}
+
+function correctionTitle(missingFields: string[]): string {
+  if (missingFields.length === 1 && missingFields[0] === "level") {
+    return "Review Level";
+  }
+  if (missingFields.length === 1 && missingFields[0] === "slotKey") {
+    return "Review Slot";
+  }
+  if (missingFields.length === 1 && missingFields[0] === "mainStatKey") {
+    return "Review Main Stat";
+  }
+  return "Review OCR";
 }
 
 function evaluateJsonInput(json: string, profile: (typeof DEFAULT_PROFILES)[number]): InputEvaluation {

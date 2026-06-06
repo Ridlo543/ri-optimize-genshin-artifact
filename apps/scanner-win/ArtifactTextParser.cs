@@ -4,10 +4,32 @@ namespace GenshinArtifactScanner.Win;
 
 internal static partial class ArtifactTextParser
 {
+    private static readonly Dictionary<string, string> SetDisplayNameToKey = new(StringComparer.Ordinal)
+    {
+        ["adaycarvedfromrisingwinds"] = "ADayCarvedFromRisingWinds",
+        ["adventurer"] = "Adventurer",
+        ["berserker"] = "Berserker",
+        ["celestialgift"] = "CelestialGift",
+        ["disenchantmentindeepshadow"] = "DisenchantmentInDeepShadow",
+        ["fragmentofharmonicwhimsy"] = "FragmentOfHarmonicWhimsy",
+        ["instructor"] = "Instructor",
+        ["longnightsoath"] = "LongNightsOath",
+        ["noblesseoblige"] = "NoblesseOblige",
+        ["obsidiancodex"] = "ObsidianCodex",
+        ["theexile"] = "TheExile",
+        ["travelingdoctor"] = "TravelingDoctor"
+    };
+
     private static readonly Dictionary<string, string> ArtifactNameToSetKey = new(StringComparer.Ordinal)
     {
         ["heavensentfragrance"] = "CelestialGift",
         ["heavensentdecree"] = "CelestialGift",
+        ["royalflora"] = "NoblesseOblige",
+        ["adventurerstailfeather"] = "Adventurer",
+        ["travelingdoctorsowlfeather"] = "TravelingDoctor",
+        ["instructorsfeatheraccessory"] = "Instructor",
+        ["exilesflower"] = "TheExile",
+        ["berserkersbonegoblet"] = "Berserker",
         ["nightingalestailfeather"] = "LongNightsOath",
         ["ahornunwinded"] = "LongNightsOath",
         ["dyedtassel"] = "LongNightsOath",
@@ -27,6 +49,45 @@ internal static partial class ArtifactTextParser
         return ArtifactNameToSetKey
             .FirstOrDefault(item => normalized.Contains(item.Key, StringComparison.Ordinal) || item.Key.Contains(normalized, StringComparison.Ordinal))
             .Value;
+    }
+
+    public static string? ParseSetKeyFromSetBonusText(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+
+        foreach (string line in text.Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        {
+            string normalized = NormalizeText(line);
+            string? match = SetDisplayNameToKey
+                .FirstOrDefault(item => normalized.Contains(item.Key, StringComparison.Ordinal) || IsNearCompleteSetName(normalized, item.Key))
+                .Value;
+            if (!string.IsNullOrWhiteSpace(match))
+            {
+                return match;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool IsNearCompleteSetName(string normalizedText, string setKey)
+    {
+        return normalizedText.Length >= setKey.Length - 2 && setKey.Contains(normalizedText, StringComparison.Ordinal);
+    }
+
+    public static string? ExtractSetDisplayName(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+
+        foreach (string line in text.Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (ParseSetKeyFromSetBonusText(line) is not null)
+            {
+                return line.Trim().TrimEnd(':').Trim();
+            }
+        }
+
+        return null;
     }
 
     public static string? ParseSlotKey(string text)
@@ -115,11 +176,23 @@ internal static partial class ArtifactTextParser
         {
             return slotKey == "flower" ? "hp" : "hp_";
         }
+        if (normalized is "h" && slotKey is "sands" or "circlet")
+        {
+            return "hp_";
+        }
         if (normalized is "atk" || normalized.StartsWith("atk", StringComparison.Ordinal))
         {
             return slotKey == "plume" ? "atk" : "atk_";
         }
+        if (normalized is "a" && slotKey is "sands" or "circlet")
+        {
+            return "atk_";
+        }
         if (normalized is "def" || normalized.StartsWith("def", StringComparison.Ordinal))
+        {
+            return "def_";
+        }
+        if (normalized is "d" && slotKey is "sands" or "circlet")
         {
             return "def_";
         }
@@ -129,13 +202,24 @@ internal static partial class ArtifactTextParser
 
     public static int? ParseLevel(string text)
     {
-        Match match = LevelRegex().Match(text);
-        if (!match.Success)
+        string normalized = NormalizeLevelText(text);
+        foreach (Match match in LevelRegex().Matches(normalized))
         {
-            return null;
+            if (int.TryParse(match.Groups["level"].Value, out int level) && level is >= 0 and <= 20)
+            {
+                return level;
+            }
         }
 
-        return int.TryParse(match.Groups["level"].Value, out int level) ? level : null;
+        return null;
+    }
+
+    public static int? ParseLeadingLevel(string text)
+    {
+        Match match = LeadingLevelRegex().Match(NormalizeLevelText(text));
+        return match.Success && int.TryParse(match.Groups["level"].Value, out int level) && level is >= 0 and <= 20
+            ? level
+            : null;
     }
 
     public static string ParseLocation(string text)
@@ -150,8 +234,23 @@ internal static partial class ArtifactTextParser
         return compact.ToLowerInvariant();
     }
 
-    [GeneratedRegex(@"\+?\s*(?<level>\d{1,2})")]
+    private static string NormalizeLevelText(string text)
+    {
+        return text
+            .Replace('O', '0')
+            .Replace('o', '0')
+            .Replace('I', '1')
+            .Replace('l', '1')
+            .Replace('S', '5')
+            .Replace('s', '5')
+            .Replace('B', '8');
+    }
+
+    [GeneratedRegex(@"(?<!\d)\+?\s*(?<level>\d{1,2})(?!\d)")]
     private static partial Regex LevelRegex();
+
+    [GeneratedRegex(@"^\s*\+?\s*(?<level>\d{1,2})(?![\d.])")]
+    private static partial Regex LeadingLevelRegex();
 
     [GeneratedRegex(@"Equipped\s*:\s*(?<location>[A-Za-z][A-Za-z\s'-]*)", RegexOptions.IgnoreCase)]
     private static partial Regex EquippedRegex();

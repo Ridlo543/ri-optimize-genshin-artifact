@@ -2,6 +2,27 @@ namespace GenshinArtifactScanner.Win;
 
 internal static class ScannerPaths
 {
+    public static ScannerLogPaths CreateScannerLogPaths(string prefix)
+    {
+        if (string.IsNullOrWhiteSpace(prefix))
+        {
+            throw new ArgumentException("Log prefix is required.", nameof(prefix));
+        }
+
+        string scanId = CreateScanId();
+        string logDirectory = Path.Combine("logs", "scanner");
+        string snapshotDirectory = Path.Combine(logDirectory, "captures");
+        Directory.CreateDirectory(logDirectory);
+        Directory.CreateDirectory(snapshotDirectory);
+
+        return new ScannerLogPaths(
+            ScanId: scanId,
+            LastSourcePath: Path.Combine(logDirectory, $"{prefix}-source-last.png"),
+            LastRegionPath: Path.Combine(logDirectory, $"{prefix}-last.png"),
+            SnapshotSourcePath: Path.Combine(snapshotDirectory, $"{prefix}-source-{scanId}.png"),
+            SnapshotRegionPath: Path.Combine(snapshotDirectory, $"{prefix}-{scanId}.png"));
+    }
+
     public static string FindRepoRoot()
     {
         IEnumerable<string> startDirectories = new[]
@@ -41,13 +62,24 @@ internal static class ScannerPaths
             throw new ArgumentException("Fixture name must not contain directory separators.", nameof(fixtureName));
         }
 
-        string path = Path.Combine(FindRepoRoot(), "data", "fixtures", "screenshots", fileName);
-        if (!File.Exists(path))
+        string repoRoot = FindRepoRoot();
+        string[] candidateDirectories =
+        [
+            Path.Combine(repoRoot, "data", "fixtures", "screenshots"),
+            Path.Combine(repoRoot, "data", "example", "picture"),
+            Path.Combine(repoRoot, "data", "log-manual")
+        ];
+
+        foreach (string directory in candidateDirectories)
         {
-            throw new FileNotFoundException("Screenshot fixture was not found.", path);
+            string candidate = Path.Combine(directory, fileName);
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
         }
 
-        return path;
+        throw new FileNotFoundException("Screenshot fixture was not found.", Path.Combine(candidateDirectories[0], fileName));
     }
 
     public static string FindTessdataDirectory()
@@ -66,4 +98,16 @@ internal static class ScannerPaths
 
         return Path.GetFullPath("tessdata");
     }
+
+    private static string CreateScanId()
+    {
+        return $"{DateTimeOffset.UtcNow:yyyyMMdd-HHmmss-fff}-{Guid.NewGuid():N}"[..31];
+    }
 }
+
+internal sealed record ScannerLogPaths(
+    string ScanId,
+    string LastSourcePath,
+    string LastRegionPath,
+    string SnapshotSourcePath,
+    string SnapshotRegionPath);

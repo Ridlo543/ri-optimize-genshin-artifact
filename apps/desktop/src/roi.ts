@@ -1,10 +1,6 @@
 import { isNormalizedScanRegion, ScanRegion, ScannerArtifactResult } from "@ri-genshin/artifact-schema";
 
-export type RoiOpacity = "hidden" | "faint" | "visible";
-
 const ROI_KEY = "ri-genshin.roi.region";
-const ROI_EDIT_KEY = "ri-genshin.roi.editing";
-const ROI_OPACITY_KEY = "ri-genshin.roi.opacity";
 const LATEST_RESULT_KEY = "ri-genshin.scanner.latestResult";
 
 export const DEFAULT_REGION: ScanRegion = {
@@ -33,33 +29,6 @@ export function saveScanRegion(region: ScanRegion): void {
     return;
   }
   window.localStorage.setItem(ROI_KEY, JSON.stringify(region));
-}
-
-export function loadRoiEditMode(): boolean {
-  return window.localStorage.getItem(ROI_EDIT_KEY) === "true";
-}
-
-export function saveRoiEditMode(value: boolean): void {
-  window.localStorage.setItem(ROI_EDIT_KEY, value ? "true" : "false");
-}
-
-export function loadRoiOpacity(): RoiOpacity {
-  const value = window.localStorage.getItem(ROI_OPACITY_KEY);
-  return value === "hidden" || value === "faint" || value === "visible" ? value : "faint";
-}
-
-export function saveRoiOpacity(value: RoiOpacity): void {
-  window.localStorage.setItem(ROI_OPACITY_KEY, value);
-}
-
-export function nextRoiOpacity(value: RoiOpacity): RoiOpacity {
-  if (value === "faint") {
-    return "visible";
-  }
-  if (value === "visible") {
-    return "hidden";
-  }
-  return "faint";
 }
 
 export function loadLatestScannerResult(): ScannerArtifactResult | null {

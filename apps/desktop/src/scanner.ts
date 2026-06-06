@@ -23,8 +23,11 @@ export async function scanVisibleArtifact(): Promise<ScannerArtifactResult> {
   return JSON.parse(raw) as ScannerArtifactResult;
 }
 
-export async function scanRegionArtifact(region: ScanRegion): Promise<ScannerArtifactResult> {
-  const raw = await invoke<string>("scanner_scan_region_artifact", { regionJson: JSON.stringify(region) });
+export async function scanRegionArtifact(region: ScanRegion, options: { occlusionAvoided?: boolean } = {}): Promise<ScannerArtifactResult> {
+  const raw = await invoke<string>("scanner_scan_region_artifact", {
+    regionJson: JSON.stringify(region),
+    occlusionAvoided: options.occlusionAvoided ?? false
+  });
   return JSON.parse(raw) as ScannerArtifactResult;
 }
 

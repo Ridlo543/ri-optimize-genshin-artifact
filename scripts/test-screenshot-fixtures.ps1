@@ -11,8 +11,32 @@ $classificationFixtures = @(
     @{ Name = "bag-grid-live-1280x800.png"; State = "artifact-bag-grid"; Ready = $false }
 )
 
+function Convert-ScannerOutputToJson($rawOutput) {
+    $text = ($rawOutput -join "`n")
+    $start = $text.IndexOf("{")
+    $end = $text.LastIndexOf("}")
+    if ($start -lt 0 -or $end -le $start) {
+        throw "Scanner output did not contain a JSON object."
+    }
+
+    return $text.Substring($start, $end - $start + 1) | ConvertFrom-Json
+}
+
+function Invoke-ScannerJson([string[]] $arguments) {
+    $previousErrorActionPreference = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    $raw = dotnet run --project $project -- @arguments 2>&1
+    $exitCode = $LASTEXITCODE
+    $ErrorActionPreference = $previousErrorActionPreference
+    if ($exitCode -ne 0) {
+        throw "Scanner process failed with exit code $exitCode."
+    }
+
+    return Convert-ScannerOutputToJson $raw
+}
+
 foreach ($fixture in $fixtures) {
-    $result = dotnet run --project $project -- parse-screenshot-fixture $fixture | ConvertFrom-Json
+    $result = Invoke-ScannerJson @("parse-screenshot-fixture", $fixture)
 
     if ($result.error -or -not $result.artifact) {
         throw "Screenshot fixture failed: $fixture :: $($result.error)"
@@ -30,7 +54,7 @@ foreach ($fixture in $fixtures) {
 }
 
 foreach ($fixture in $classificationFixtures) {
-    $result = dotnet run --project $project -- classify-screenshot-fixture $fixture.Name | ConvertFrom-Json
+    $result = Invoke-ScannerJson @("classify-screenshot-fixture", $fixture.Name)
 
     if ($result.screenState.code -ne $fixture.State -or $result.screenState.readyForArtifactOcr -ne $fixture.Ready) {
         throw "Screenshot classification failed: $($fixture.Name) :: $($result.screenState.code)"

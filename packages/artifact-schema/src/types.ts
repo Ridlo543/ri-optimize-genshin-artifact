@@ -29,7 +29,7 @@ export enum ArtifactPiece {
 }
 
 export type ArtifactLevel = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20;
-export type ArtifactRarity = 3 | 4 | 5;
+export type ArtifactRarity = 2 | 3 | 4 | 5;
 
 export interface SubstatInput {
   stat: StatType;
@@ -81,6 +81,7 @@ export interface ScanConfidence {
 }
 
 export interface ScannerCapture {
+  scanId?: string;
   resolution: string;
   capturedAt: string;
   layout?: string;
@@ -90,6 +91,7 @@ export interface ScannerCapture {
   screenshotHash?: string;
   regionHash?: string;
   region?: ScanRegion;
+  occlusionAvoided?: boolean;
 }
 
 export interface ScanRegion {
@@ -120,7 +122,19 @@ export interface ScannerArtifactResult {
   mode: "visible-artifact" | "fixture-card" | "screenshot-artifact" | "screen-classification" | "region-artifact" | "region-classification";
   confidence: ScanConfidence;
   artifact: GoodArtifact | null;
+  artifactDraft?: Partial<GoodArtifact> | null;
+  missingFields?: string[];
+  optionalWarnings?: string[];
   screenState?: ScannerScreenState;
   capture: ScannerCapture;
   error?: string;
+  diagnostics?: {
+    setIdentity?: {
+      rawItemName?: string;
+      rawSetDisplayName?: string;
+      matchedSetKey?: string;
+      matchSource: string;
+    };
+    [key: string]: unknown;
+  };
 }

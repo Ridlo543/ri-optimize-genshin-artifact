@@ -9,6 +9,12 @@ internal static partial class NativeMethods
 
     [DllImport("user32.dll", SetLastError = true)]
     public static extern bool ClientToScreen(nint hWnd, ref NativePoint point);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool SetProcessDpiAwarenessContext(nint dpiContext);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool SetProcessDPIAware();
 }
 
 [StructLayout(LayoutKind.Sequential)]

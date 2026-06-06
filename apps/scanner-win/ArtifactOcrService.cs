@@ -80,14 +80,49 @@ internal sealed class ArtifactOcrService(OcrTextReader reader)
 
     public OcrFieldResult<int> ReadLevel(string imagePath, bool writeDebugImage = false)
     {
-        OcrFieldResult<string> text = ReadTextField(imagePath, "level", PageSegMode.SingleWord, writeDebugImage);
-        return ParseLevel(text);
+        if (string.IsNullOrWhiteSpace(imagePath))
+        {
+            throw new ArgumentException("Image path is required.", nameof(imagePath));
+        }
+        if (!File.Exists(imagePath))
+        {
+            throw new FileNotFoundException("level image was not found.", imagePath);
+        }
+
+        using Bitmap source = new(imagePath);
+        return ReadLevel(source, Path.GetFullPath(imagePath), writeDebugImage);
     }
 
     public OcrFieldResult<int> ReadLevel(Bitmap source, string? imagePath = null, bool writeDebugImage = false)
     {
-        OcrFieldResult<string> text = ReadTextField(source, "level", PageSegMode.SingleWord, imagePath, writeDebugImage);
-        return ParseLevel(text);
+        OcrFieldResult<string> text = ReadLevelTextField(source, "level", PageSegMode.SingleLine, imagePath, writeDebugImage);
+        OcrFieldResult<int> parsed = ParseLevel(text);
+        if (parsed.Value >= 0)
+        {
+            return parsed;
+        }
+
+        OcrFieldResult<string> fallbackText = ReadTextField(source, "level-fallback", PageSegMode.SingleWord, imagePath, writeDebugImage);
+        OcrFieldResult<int> fallback = ParseLevel(fallbackText);
+        return fallback.Value >= 0
+            ? new OcrFieldResult<int>
+            {
+                Field = "level",
+                Value = fallback.Value,
+                RawText = fallback.RawText,
+                Confidence = fallback.Confidence,
+                ImagePath = fallback.ImagePath,
+                DebugImagePath = fallback.DebugImagePath
+            }
+            : new OcrFieldResult<int>
+            {
+                Field = "level",
+                Value = -1,
+                RawText = string.Join(" ", new[] { text.RawText, fallbackText.RawText }.Where(value => !string.IsNullOrWhiteSpace(value))),
+                Confidence = 0,
+                ImagePath = imagePath is null ? null : Path.GetFullPath(imagePath),
+                DebugImagePath = text.DebugImagePath
+            };
     }
 
     public OcrFieldResult<string> ReadLocation(string imagePath, bool writeDebugImage = false)
@@ -117,7 +152,13 @@ internal sealed class ArtifactOcrService(OcrTextReader reader)
     private static OcrFieldResult<string> ParseMainStatKey(OcrFieldResult<string> text, string? slotKey)
     {
         string? value = ArtifactTextParser.ParseMainStatKey(text.RawText ?? string.Empty, slotKey);
-        return WithValue(text, value, value is null ? 0 : text.Confidence);
+        double confidence = value is null ? 0 : text.Confidence;
+        if (value is "atk_" or "hp_" or "def_" && IsShortMainStatOcr(text.RawText))
+        {
+            confidence = Math.Max(confidence, 0.55);
+        }
+
+        return WithValue(text, value, confidence);
     }
 
     private static OcrFieldResult<int> ParseLevel(OcrFieldResult<string> text)
@@ -176,6 +217,25 @@ internal sealed class ArtifactOcrService(OcrTextReader reader)
         };
     }
 
+    private OcrFieldResult<string> ReadLevelTextField(Bitmap source, string fieldName, PageSegMode pageSegMode, string? imagePath, bool writeDebugImage)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+
+        using Bitmap processed = ArtifactImagePreprocessor.PreprocessLevel(source);
+        string? debugImagePath = writeDebugImage ? ArtifactImagePreprocessor.SaveDebugImage(processed, imagePath ?? fieldName, fieldName) : null;
+        OcrTextResult text = reader.ReadText(processed, pageSegMode);
+
+        return new OcrFieldResult<string>
+        {
+            Field = fieldName,
+            Value = null,
+            RawText = text.Text.Trim(),
+            Confidence = text.Confidence,
+            ImagePath = imagePath is null ? null : Path.GetFullPath(imagePath),
+            DebugImagePath = debugImagePath
+        };
+    }
+
     private static OcrFieldResult<string> WithValue(OcrFieldResult<string> source, string? value, double confidence)
     {
         return new OcrFieldResult<string>
@@ -187,5 +247,11 @@ internal sealed class ArtifactOcrService(OcrTextReader reader)
             ImagePath = source.ImagePath,
             DebugImagePath = source.DebugImagePath
         };
+    }
+
+    private static bool IsShortMainStatOcr(string? rawText)
+    {
+        string value = rawText is null ? string.Empty : new string(rawText.Where(char.IsLetter).ToArray());
+        return value.Length is > 0 and <= 2;
     }
 }

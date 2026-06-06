@@ -13,5 +13,8 @@ The app uses a community-derived Genshin artifact probability model. It is not o
 ## Scoring
 
 - CV is `CRIT Rate * 2 + CRIT DMG`.
-- Weighted score is the sum of stat values multiplied by the selected scoring profile weights.
-- Recommendations are heuristics over current score, expected final score, and threshold probabilities.
+- Active Crit Value includes only currently active substats. Known Crit Value also includes a visible unactivated substat because that stat is guaranteed to activate at the next unlock milestone.
+- Useful Roll Value normalizes each useful substat by that rarity's maximum roll value, then applies the selected profile's utility weight.
+- Chance to Reach Target is the exact probability that the final Useful Roll Value reaches the selected profile's explicit target.
+- Recommendations are profile-based heuristics over exact outcome probabilities. They do not claim that an artifact is universally good for every character.
+- Set fit is not evaluated in the MVP. Legacy raw weighted score remains available only for advanced diagnostics and compatibility.

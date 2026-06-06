@@ -13,7 +13,7 @@ internal sealed class ArtifactRegionParser(ArtifactOcrService ocrService)
             MainStat: RectFromPanel(31, 151, 225, 32, 494, 962),
             Level: RectFromPanel(31, 312, 69, 33, 494, 962),
             Lock: RectFromPanel(369, 303, 47, 47, 494, 962),
-            Substats: RectFromPanel(31, 350, 409, 151, 494, 962),
+            Substats: RectFromPanel(31, 350, 409, 220, 494, 962),
             Equipped: RectFromPanel(31, 904, 420, 55, 494, 962)));
 
     private static readonly RegionLayoutProfile CharacterPanelProfile = new(
@@ -25,6 +25,17 @@ internal sealed class ArtifactRegionParser(ArtifactOcrService ocrService)
             Level: RectFromPanel(11, 213, 120, 50, 466, 1000),
             Lock: RectFromPanel(332, 79, 47, 47, 466, 1000),
             Substats: RectFromPanel(11, 258, 455, 180, 466, 1000),
+            Equipped: RectFromPanel(11, 940, 420, 60, 466, 1000)));
+
+    private static readonly RegionLayoutProfile CharacterLongTitleProfile = new(
+        "roi-character-panel-long-title",
+        new RegionFieldRectangles(
+            Name: RectFromPanel(11, 29, 420, 96, 466, 1000),
+            Slot: RectFromPanel(11, 128, 360, 42, 466, 1000),
+            MainStat: RectFromPanel(11, 171, 300, 58, 466, 1000),
+            Level: RectFromPanel(11, 286, 120, 50, 466, 1000),
+            Lock: RectFromPanel(332, 79, 47, 47, 466, 1000),
+            Substats: RectFromPanel(11, 330, 455, 180, 466, 1000),
             Equipped: RectFromPanel(11, 940, 420, 60, 466, 1000)));
 
     private readonly ArtifactOcrService ocrService = ocrService ?? throw new ArgumentNullException(nameof(ocrService));
@@ -41,7 +52,7 @@ internal sealed class ArtifactRegionParser(ArtifactOcrService ocrService)
         }
 
         using Bitmap screenshot = new(screenshotPath);
-        return ParseBitmap(screenshot, region, "fixture", "region-artifact", Path.GetFullPath(screenshotPath), null, writeDebugImage);
+        return ParseBitmap(screenshot, region, "fixture", "region-artifact", Path.GetFullPath(screenshotPath), null, null, writeDebugImage: writeDebugImage);
     }
 
     public ScanResult ParseBitmap(
@@ -51,6 +62,8 @@ internal sealed class ArtifactRegionParser(ArtifactOcrService ocrService)
         string mode,
         string? screenshotPath = null,
         string? regionImagePath = null,
+        string? scanId = null,
+        bool occlusionAvoided = false,
         bool writeDebugImage = false)
     {
         ArgumentNullException.ThrowIfNull(screenshot);
@@ -64,25 +77,37 @@ internal sealed class ArtifactRegionParser(ArtifactOcrService ocrService)
         RegionLayoutProfile? profile = DetectProfile(panel);
         if (profile is null)
         {
-            return CreateReviewRoiResult(screenshot, region, source, mode, screenshotPath, regionImagePath, screenshotHash, regionHash);
+            return CreateReviewRoiResult(screenshot, region, source, mode, screenshotPath, regionImagePath, scanId, screenshotHash, regionHash, occlusionAvoided);
         }
 
-        using FieldCrops crops = CropFields(panel, profile);
-        OcrFieldResult<string> slot = ocrService.ReadSlotKey(crops.Slot, writeDebugImage: writeDebugImage);
-        OcrFieldResult<string> mainStat = ocrService.ReadMainStatKey(crops.MainStat, slot.Value, writeDebugImage: writeDebugImage);
-        OcrFieldResult<int> level = ocrService.ReadLevel(crops.Level, writeDebugImage: writeDebugImage);
-        OcrFieldResult<string> setKey = ocrService.ReadSetKey(crops.Name, writeDebugImage: writeDebugImage);
-        OcrFieldResult<bool> locked = ArtifactVisualClassifier.ReadLock(crops.Lock);
-        OcrFieldResult<string> location = ocrService.ReadLocation(crops.Equipped, writeDebugImage: writeDebugImage);
-        OcrSubstatsResult substats = ocrService.ReadSubstats(crops.Substats, writeDebugImage: writeDebugImage);
+        FieldReadResult fields = ReadFields(panel, profile, writeDebugImage);
+        if (profile == CharacterPanelProfile)
+        {
+            FieldReadResult alternateFields = ReadFields(panel, CharacterLongTitleProfile, writeDebugImage);
+            fields = MergeCharacterFields(fields, alternateFields);
+        }
 
-        List<string> missingFields = FindMissingFields(setKey, slot, mainStat, level, substats);
+        OcrFieldResult<string> slot = fields.Slot;
+        OcrFieldResult<string> mainStat = fields.MainStat;
+        OcrFieldResult<int> level = fields.Level;
+        OcrFieldResult<bool> locked = fields.Locked;
+        OcrFieldResult<string> location = fields.Location;
+        OcrSubstatsResult substats = fields.Substats;
+        ArtifactSetResolution setResolution = ArtifactSetResolver.Resolve(fields.ItemNameSetKey, substats);
+        OcrFieldResult<string> setKey = setResolution.Field;
+
+        int rarity = fields.Rarity;
+        double substatsConfidence = rarity == 2 && level.Value == 0 && substats.Substats.Count == 0
+            ? 0.9
+            : substats.Confidence;
+        GoodArtifactDraft artifactDraft = CreateArtifactDraft(setKey, slot, mainStat, level, substats, locked, location, rarity);
+        List<string> missingFields = FindMissingFields(slot, mainStat, level, substats, rarity);
         GoodArtifact? artifact = missingFields.Count == 0
             ? new GoodArtifact
             {
                 SetKey = setKey.Value,
                 SlotKey = slot.Value ?? string.Empty,
-                Rarity = EstimateRarity(crops.Name),
+                Rarity = rarity,
                 Level = level.Value,
                 MainStatKey = mainStat.Value ?? string.Empty,
                 Substats = substats.Substats,
@@ -110,29 +135,35 @@ internal sealed class ArtifactRegionParser(ArtifactOcrService ocrService)
                 SlotKey = slot.Confidence,
                 MainStatKey = mainStat.Confidence,
                 Level = level.Confidence,
-                Substats = substats.Confidence,
+                Substats = substatsConfidence,
                 Lock = locked.Confidence,
                 Equipped = string.IsNullOrWhiteSpace(location.Value) ? 0.75 : location.Confidence,
                 Location = location.Confidence
             },
             Artifact = artifact,
+            ArtifactDraft = artifactDraft,
+            MissingFields = missingFields,
+            OptionalWarnings = setResolution.Warnings,
             ScreenState = screenState,
             Capture = new CaptureInfo
             {
+                ScanId = scanId,
                 Resolution = $"{screenshot.Width}x{screenshot.Height}",
                 CapturedAt = DateTimeOffset.UtcNow.ToString("O"),
-                Layout = profile.Name,
+                Layout = fields.ProfileName,
                 ScreenshotImagePath = screenshotPath,
                 RegionImagePath = regionImagePath,
                 ScreenshotHash = screenshotHash,
                 RegionHash = regionHash,
-                Region = region
+                Region = region,
+                OcclusionAvoided = occlusionAvoided
             },
             Diagnostics = new ScanDiagnostics
             {
                 ScreenshotPath = screenshotPath,
                 RawText = BuildRawText(setKey, slot, mainStat, level, location, substats),
-                CropRectangles = crops.Rectangles
+                CropRectangles = fields.Rectangles,
+                SetIdentity = setResolution.Diagnostics
             },
             Error = missingFields.Count == 0 ? null : $"Region OCR missing required fields: {string.Join(", ", missingFields)}."
         };
@@ -153,7 +184,7 @@ internal sealed class ArtifactRegionParser(ArtifactOcrService ocrService)
         return ClassifyBitmap(screenshot, region, "fixture", "region-classification", Path.GetFullPath(screenshotPath), null);
     }
 
-    public static ScanResult ClassifyBitmap(Bitmap screenshot, ScanRegion region, string source, string mode, string? screenshotPath = null, string? regionImagePath = null)
+    public static ScanResult ClassifyBitmap(Bitmap screenshot, ScanRegion region, string source, string mode, string? screenshotPath = null, string? regionImagePath = null, string? scanId = null)
     {
         ArgumentNullException.ThrowIfNull(screenshot);
         ScanRegionParser.Validate(region);
@@ -184,6 +215,7 @@ internal sealed class ArtifactRegionParser(ArtifactOcrService ocrService)
             Capture = new CaptureInfo
             {
                 Resolution = $"{screenshot.Width}x{screenshot.Height}",
+                ScanId = scanId,
                 CapturedAt = DateTimeOffset.UtcNow.ToString("O"),
                 Layout = profile?.Name ?? "roi-review",
                 ScreenshotImagePath = screenshotPath,
@@ -202,17 +234,21 @@ internal sealed class ArtifactRegionParser(ArtifactOcrService ocrService)
 
     private static RegionLayoutProfile? DetectProfile(Bitmap panel)
     {
-        double beige = Ratio(panel, IsArtifactPanelBeige);
-        if (beige > 0.45)
+        double red = Ratio(panel, IsCharacterArtifactRed);
+        if (red > 0.35)
+        {
+            return CharacterPanelProfile;
+        }
+
+        if (ArtifactVisualClassifier.IsBagArtifactPanel(panel))
         {
             return BagCardProfile;
         }
 
-        double red = Ratio(panel, IsCharacterArtifactRed);
-        return red > 0.35 ? CharacterPanelProfile : null;
+        return null;
     }
 
-    private static ScanResult CreateReviewRoiResult(Bitmap screenshot, ScanRegion region, string source, string mode, string? screenshotPath, string? regionImagePath, string screenshotHash, string regionHash)
+    private static ScanResult CreateReviewRoiResult(Bitmap screenshot, ScanRegion region, string source, string mode, string? screenshotPath, string? regionImagePath, string? scanId, string screenshotHash, string regionHash, bool occlusionAvoided)
     {
         ScreenStateInfo screenState = ReviewRoiState();
         return new ScanResult
@@ -224,6 +260,7 @@ internal sealed class ArtifactRegionParser(ArtifactOcrService ocrService)
             ScreenState = screenState,
             Capture = new CaptureInfo
             {
+                ScanId = scanId,
                 Resolution = $"{screenshot.Width}x{screenshot.Height}",
                 CapturedAt = DateTimeOffset.UtcNow.ToString("O"),
                 Layout = "roi-review",
@@ -231,7 +268,8 @@ internal sealed class ArtifactRegionParser(ArtifactOcrService ocrService)
                 RegionImagePath = regionImagePath,
                 ScreenshotHash = screenshotHash,
                 RegionHash = regionHash,
-                Region = region
+                Region = region,
+                OcclusionAvoided = occlusionAvoided
             },
             Error = screenState.Message
         };
@@ -279,18 +317,122 @@ internal sealed class ArtifactRegionParser(ArtifactOcrService ocrService)
             });
     }
 
+    private FieldReadResult ReadFields(Bitmap panel, RegionLayoutProfile profile, bool writeDebugImage)
+    {
+        using FieldCrops crops = CropFields(panel, profile);
+        OcrFieldResult<string> slot = ocrService.ReadSlotKey(crops.Slot, writeDebugImage: writeDebugImage);
+        OcrFieldResult<string> mainStat = ocrService.ReadMainStatKey(crops.MainStat, slot.Value, writeDebugImage: writeDebugImage);
+        OcrFieldResult<int> level = ocrService.ReadLevel(crops.Level, writeDebugImage: writeDebugImage);
+        OcrSubstatsResult substats = ocrService.ReadSubstats(crops.Substats, writeDebugImage: writeDebugImage);
+        level = PreferLeadingLevelFromSubstats(level, substats);
+
+        return new FieldReadResult(
+            ProfileName: profile.Name,
+            ItemNameSetKey: ocrService.ReadSetKey(crops.Name, writeDebugImage: writeDebugImage),
+            Slot: slot,
+            MainStat: mainStat,
+            Level: level,
+            Locked: ArtifactVisualClassifier.ReadLock(crops.Lock),
+            Location: ocrService.ReadLocation(crops.Equipped, writeDebugImage: writeDebugImage),
+            Substats: substats,
+            Rarity: ArtifactVisualClassifier.EstimateRarity(crops.Name),
+            Rectangles: crops.Rectangles);
+    }
+
+    private static OcrFieldResult<int> PreferLeadingLevelFromSubstats(OcrFieldResult<int> level, OcrSubstatsResult substats)
+    {
+        int? parsed = ArtifactTextParser.ParseLeadingLevel(substats.RawText);
+        if (!parsed.HasValue || level.Confidence >= 0.55)
+        {
+            return level;
+        }
+
+        return new OcrFieldResult<int>
+        {
+            Field = "level",
+            Value = parsed.Value,
+            RawText = string.IsNullOrWhiteSpace(level.RawText) ? substats.RawText.Split('\n').FirstOrDefault() : level.RawText,
+            Confidence = Math.Max(level.Confidence, 0.72),
+            ImagePath = level.ImagePath,
+            DebugImagePath = level.DebugImagePath
+        };
+    }
+
+    private static FieldReadResult MergeCharacterFields(FieldReadResult primary, FieldReadResult alternate)
+    {
+        OcrFieldResult<string> itemNameSetKey = PreferTextField(primary.ItemNameSetKey, alternate.ItemNameSetKey);
+        OcrFieldResult<string> slot = PreferTextField(primary.Slot, alternate.Slot);
+        OcrFieldResult<string> mainStat = PreferTextField(primary.MainStat, alternate.MainStat);
+        OcrFieldResult<int> level = PreferLevelField(primary.Level, alternate.Level);
+        OcrSubstatsResult substats = alternate.Substats.Substats.Count > primary.Substats.Substats.Count ? alternate.Substats : primary.Substats;
+        bool usedAlternate =
+            !ReferenceEquals(itemNameSetKey, primary.ItemNameSetKey) ||
+            !ReferenceEquals(slot, primary.Slot) ||
+            !ReferenceEquals(mainStat, primary.MainStat) ||
+            !ReferenceEquals(level, primary.Level) ||
+            !ReferenceEquals(substats, primary.Substats);
+        if (!usedAlternate)
+        {
+            return primary;
+        }
+
+        Dictionary<string, string> rectangles = new(primary.Rectangles)
+        {
+            ["layout"] = "roi-character-panel-merged",
+            ["alternateLayout"] = alternate.ProfileName,
+            ["alternateSlot"] = alternate.Rectangles["slot"],
+            ["alternateMainStat"] = alternate.Rectangles["mainStat"],
+            ["alternateLevel"] = alternate.Rectangles["level"]
+        };
+
+        return primary with
+        {
+            ProfileName = "roi-character-panel-merged",
+            ItemNameSetKey = itemNameSetKey,
+            Slot = slot,
+            MainStat = mainStat,
+            Level = level,
+            Substats = substats,
+            Rectangles = rectangles
+        };
+    }
+
+    private static OcrFieldResult<string> PreferTextField(OcrFieldResult<string> primary, OcrFieldResult<string> alternate)
+    {
+        if (string.IsNullOrWhiteSpace(primary.Value) && !string.IsNullOrWhiteSpace(alternate.Value))
+        {
+            return alternate;
+        }
+        if (!string.IsNullOrWhiteSpace(alternate.Value) && alternate.Confidence > primary.Confidence + 0.2)
+        {
+            return alternate;
+        }
+
+        return primary;
+    }
+
+    private static OcrFieldResult<int> PreferLevelField(OcrFieldResult<int> primary, OcrFieldResult<int> alternate)
+    {
+        if (primary.Value < 0 && alternate.Value >= 0)
+        {
+            return alternate;
+        }
+        if (alternate.Value >= 0 && alternate.Confidence > primary.Confidence + 0.2)
+        {
+            return alternate;
+        }
+
+        return primary;
+    }
+
     private static List<string> FindMissingFields(
-        OcrFieldResult<string> setKey,
         OcrFieldResult<string> slot,
         OcrFieldResult<string> mainStat,
         OcrFieldResult<int> level,
-        OcrSubstatsResult substats)
+        OcrSubstatsResult substats,
+        int rarity)
     {
         List<string> missing = [];
-        if (string.IsNullOrWhiteSpace(setKey.Value))
-        {
-            missing.Add("setKey");
-        }
         if (string.IsNullOrWhiteSpace(slot.Value))
         {
             missing.Add("slotKey");
@@ -303,12 +445,36 @@ internal sealed class ArtifactRegionParser(ArtifactOcrService ocrService)
         {
             missing.Add("level");
         }
-        if (substats.Substats.Count == 0)
+        if (rarity > 2 && substats.Substats.Count == 0)
         {
             missing.Add("substats");
         }
 
         return missing;
+    }
+
+    private static GoodArtifactDraft CreateArtifactDraft(
+        OcrFieldResult<string> setKey,
+        OcrFieldResult<string> slot,
+        OcrFieldResult<string> mainStat,
+        OcrFieldResult<int> level,
+        OcrSubstatsResult substats,
+        OcrFieldResult<bool> locked,
+        OcrFieldResult<string> location,
+        int rarity)
+    {
+        return new GoodArtifactDraft
+        {
+            SetKey = string.IsNullOrWhiteSpace(setKey.Value) ? null : setKey.Value,
+            SlotKey = string.IsNullOrWhiteSpace(slot.Value) ? null : slot.Value,
+            Rarity = rarity,
+            Level = level.Value >= 0 ? level.Value : null,
+            MainStatKey = string.IsNullOrWhiteSpace(mainStat.Value) ? null : mainStat.Value,
+            Substats = substats.Substats,
+            UnactivatedSubstats = substats.UnactivatedSubstats,
+            Lock = locked.Value,
+            Location = location.Value ?? string.Empty
+        };
     }
 
     private static Dictionary<string, string> BuildRawText(
@@ -330,25 +496,6 @@ internal sealed class ArtifactRegionParser(ArtifactOcrService ocrService)
         };
     }
 
-    private static int EstimateRarity(Bitmap nameCrop)
-    {
-        int purple = 0;
-        int total = nameCrop.Width * nameCrop.Height;
-        for (int y = 0; y < nameCrop.Height; y++)
-        {
-            for (int x = 0; x < nameCrop.Width; x++)
-            {
-                Color pixel = nameCrop.GetPixel(x, y);
-                if (pixel.R > 110 && pixel.B > 120 && pixel.G < 120)
-                {
-                    purple++;
-                }
-            }
-        }
-
-        return total > 0 && purple / (double)total > 0.12 ? 4 : 5;
-    }
-
     private static double Ratio(Bitmap image, Func<Color, bool> predicate)
     {
         int matches = 0;
@@ -365,11 +512,6 @@ internal sealed class ArtifactRegionParser(ArtifactOcrService ocrService)
         }
 
         return total == 0 ? 0 : matches / (double)total;
-    }
-
-    private static bool IsArtifactPanelBeige(Color pixel)
-    {
-        return pixel.R > 150 && pixel.G > 125 && pixel.B > 95 && Math.Abs(pixel.R - pixel.G) < 85 && pixel.R > pixel.B;
     }
 
     private static bool IsCharacterArtifactRed(Color pixel)
@@ -430,4 +572,16 @@ internal sealed class ArtifactRegionParser(ArtifactOcrService ocrService)
             Equipped.Dispose();
         }
     }
+
+    private sealed record FieldReadResult(
+        string ProfileName,
+        OcrFieldResult<string> ItemNameSetKey,
+        OcrFieldResult<string> Slot,
+        OcrFieldResult<string> MainStat,
+        OcrFieldResult<int> Level,
+        OcrFieldResult<bool> Locked,
+        OcrFieldResult<string> Location,
+        OcrSubstatsResult Substats,
+        int Rarity,
+        Dictionary<string, string> Rectangles);
 }

@@ -13,6 +13,8 @@ internal static class Program
 
     public static int Main(string[] args)
     {
+        DpiAwareness.Enable();
+
         object payload = ScannerCommands.Execute(args);
         Console.WriteLine(JsonSerializer.Serialize(payload, JsonOptions));
         return payload is ScannerError ? 2 : 0;

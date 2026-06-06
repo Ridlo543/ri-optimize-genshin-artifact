@@ -1,3 +1,4 @@
+import { ArtifactRarity } from "@ri-genshin/artifact-schema";
 import { ScoringProfile } from "./scoring";
 
 export type RecommendationLabel =
@@ -5,7 +6,8 @@ export type RecommendationLabel =
   | "UPGRADE"
   | "UPGRADE_CAUTIOUSLY"
   | "RISKY_KEEP"
-  | "STOP_OR_FODDER";
+  | "STOP_OR_FODDER"
+  | "LOW_RARITY_FODDER";
 
 export interface Recommendation {
   label: RecommendationLabel;
@@ -18,32 +20,51 @@ export interface RecommendationInput {
   currentCV: number;
   expectedFinalScore: number;
   expectedFinalCV: number;
+  usefulRollValue: number;
+  expectedFinalUsefulRollValue: number;
+  probabilityReachProfileTarget: number;
   probabilityReachScoreThreshold: Record<number, number>;
   probabilityReachCVThreshold: Record<number, number>;
   remainingUpgradeEvents: number;
+  rarity: ArtifactRarity;
 }
 
 export function recommendArtifact(input: RecommendationInput, profile: ScoringProfile): Recommendation {
-  const pGood = input.probabilityReachScoreThreshold[profile.thresholds.goodScore] ?? 0;
-  const pExcellent = input.probabilityReachScoreThreshold[profile.thresholds.excellentScore] ?? 0;
+  const pGood = input.probabilityReachProfileTarget;
   const explanation = [
     `${input.remainingUpgradeEvents} upgrade event(s) remain.`,
-    `Expected final score is ${input.expectedFinalScore.toFixed(1)}.`,
-    `Chance to reach good score (${profile.thresholds.goodScore}) is ${(pGood * 100).toFixed(1)}%.`,
-    `Expected final CV is ${input.expectedFinalCV.toFixed(1)}.`
+    `Expected useful roll value is ${input.expectedFinalUsefulRollValue.toFixed(1)} for the ${profile.name} profile.`,
+    `Chance to reach the ${profile.thresholds.goodUsefulRollValue.toFixed(1)} useful-roll target is ${(pGood * 100).toFixed(1)}%.`,
+    `Expected final Crit Value is ${input.expectedFinalCV.toFixed(1)}.`,
+    "Artifact set fit is not evaluated."
   ];
 
-  if (input.currentScore >= profile.thresholds.excellentScore) {
-    return { label: "EXCELLENT", title: "Excellent: upgrade to +20", explanation };
+  if (input.rarity <= 3) {
+    return {
+      label: "LOW_RARITY_FODDER",
+      title: "Low rarity: temporary or fodder",
+      explanation: [
+        ...explanation,
+        `${input.rarity}-star artifacts have a low level cap, so treat this as temporary gear unless it fills an immediate gap.`
+      ]
+    };
   }
-  if (pExcellent >= 0.25 || pGood >= 0.7) {
-    return { label: "UPGRADE", title: "Good: continue upgrading", explanation };
+
+  const rarityExplanation = input.rarity === 4
+    ? [...explanation, "4-star artifacts cap at +16, so compare them as temporary pieces."]
+    : explanation;
+
+  if (input.usefulRollValue >= profile.thresholds.excellentUsefulRollValue) {
+    return { label: "EXCELLENT", title: `High ${profile.name.toLowerCase()}: upgrade`, explanation: rarityExplanation };
+  }
+  if (pGood >= 0.7) {
+    return { label: "UPGRADE", title: `Good ${profile.name.toLowerCase()}: continue`, explanation: rarityExplanation };
   }
   if (pGood >= profile.thresholds.minProbabilityToContinue) {
-    return { label: "UPGRADE_CAUTIOUSLY", title: "Upgrade cautiously", explanation };
+    return { label: "UPGRADE_CAUTIOUSLY", title: `Borderline ${profile.name.toLowerCase()}: test rolls`, explanation: rarityExplanation };
   }
   if (pGood >= 0.2) {
-    return { label: "RISKY_KEEP", title: "Promising but risky", explanation };
+    return { label: "RISKY_KEEP", title: `Low-chance ${profile.name.toLowerCase()}: keep cautiously`, explanation: rarityExplanation };
   }
-  return { label: "STOP_OR_FODDER", title: "Stop or fodder candidate", explanation };
+  return { label: "STOP_OR_FODDER", title: `Low ${profile.name.toLowerCase()}: stop candidate`, explanation: rarityExplanation };
 }

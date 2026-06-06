@@ -1,4 +1,4 @@
-import { ArtifactInput, StatType, SubstatInput } from "@ri-genshin/artifact-schema";
+import { ArtifactInput, getMaxArtifactLevel, isArtifactRarity, StatType, SubstatInput } from "@ri-genshin/artifact-schema";
 import { MINOR_STATS, VALID_MAIN_STATS_BY_PIECE } from "./constants";
 
 export interface ValidationResult {
@@ -14,12 +14,14 @@ export function validateArtifact(artifact: ArtifactInput): ValidationResult {
     errors.push(`Main stat ${artifact.mainStat} is not valid for ${artifact.piece}.`);
   }
 
-  if (artifact.rarity !== 5) {
-    errors.push("MVP supports 5-star artifacts only.");
+  if (!isArtifactRarity(artifact.rarity)) {
+    errors.push("Artifact rarity must be an integer from 2 to 5.");
   }
 
   if (!Number.isInteger(artifact.level) || artifact.level < 0 || artifact.level > 20) {
     errors.push("Artifact level must be an integer from 0 to 20.");
+  } else if (isArtifactRarity(artifact.rarity) && artifact.level > getMaxArtifactLevel(artifact.rarity)) {
+    errors.push(`Artifact level must be at most +${getMaxArtifactLevel(artifact.rarity)} for ${artifact.rarity}-star artifacts.`);
   }
 
   const seen = new Set<StatType>();
@@ -53,8 +55,8 @@ export function validateArtifact(artifact: ArtifactInput): ValidationResult {
   if (artifact.substats.length > 4) {
     errors.push("Artifact cannot have more than 4 known substats.");
   }
-  if (artifact.level === 20 && inactiveCount > 0) {
-    errors.push("+20 artifact cannot have an unactivated substat.");
+  if (isArtifactRarity(artifact.rarity) && artifact.level === getMaxArtifactLevel(artifact.rarity) && inactiveCount > 0) {
+    errors.push(`+${getMaxArtifactLevel(artifact.rarity)} artifact cannot have an unactivated substat.`);
   }
 
   return { valid: errors.length === 0, errors };

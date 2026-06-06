@@ -38,6 +38,13 @@ export const ARTIFACT_PIECE_TO_GOOD_SLOT: Record<ArtifactPiece, string> = Object
   Object.entries(GOOD_SLOT_TO_ARTIFACT_PIECE).map(([slot, piece]) => [piece, slot])
 ) as Record<ArtifactPiece, string>;
 
+export const ARTIFACT_MAX_LEVEL_BY_RARITY: Record<ArtifactRarity, ArtifactLevel> = {
+  2: 4,
+  3: 12,
+  4: 16,
+  5: 20
+};
+
 export interface GoodImportPayload {
   artifacts?: GoodArtifact[];
   artifact?: GoodArtifact;
@@ -75,6 +82,14 @@ export function isArtifactLevel(level: number): level is ArtifactLevel {
   return Number.isInteger(level) && level >= 0 && level <= 20;
 }
 
+export function isArtifactRarity(rarity: number): rarity is ArtifactRarity {
+  return Number.isInteger(rarity) && rarity >= 2 && rarity <= 5;
+}
+
+export function getMaxArtifactLevel(rarity: ArtifactRarity): ArtifactLevel {
+  return ARTIFACT_MAX_LEVEL_BY_RARITY[rarity];
+}
+
 export function extractGoodArtifacts(payload: unknown): GoodArtifact[] {
   if (Array.isArray(payload)) {
     return payload.filter(isGoodArtifactLike);
@@ -108,11 +123,28 @@ export function extractGoodArtifacts(payload: unknown): GoodArtifact[] {
 export function normalizeGoodArtifact(good: GoodArtifact): GoodArtifactNormalizationResult {
   const warnings: GoodNormalizationWarning[] = [];
 
+  if (!isArtifactRarity(good.rarity)) {
+    return {
+      artifact: null,
+      warnings,
+      skipReason: `Artifact rarity ${good.rarity} is outside supported range 2..5.`
+    };
+  }
+
   if (!isArtifactLevel(good.level)) {
     return {
       artifact: null,
       warnings,
       skipReason: `Artifact level ${good.level} is outside supported range 0..20.`
+    };
+  }
+
+  const maxLevel = getMaxArtifactLevel(good.rarity);
+  if (good.level > maxLevel) {
+    return {
+      artifact: null,
+      warnings,
+      skipReason: `Artifact level ${good.level} exceeds max +${maxLevel} for ${good.rarity}-star artifacts.`
     };
   }
 

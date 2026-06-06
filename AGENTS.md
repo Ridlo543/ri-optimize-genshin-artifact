@@ -12,6 +12,8 @@ This repository is a Windows desktop-first Genshin Impact artifact decision assi
 - Keep screen capture and OCR work in `apps/scanner-win`; do not run heavy OCR in React.
 - Treat scanner output as untrusted input and validate it before evaluation.
 - Prefer ROI-first live scanning: the user positions a normalized artifact-card rectangle, the scanner crops only that region, and full-screen parsing remains fallback/debug.
+- Use the fixture playground for offline UI/OCR development before live Genshin checks: `http://localhost:5173?window=fixture-playground&fixture=character-plus20`.
+- The default assistant flow is manual `Analisis`; `Watch` must remain explicit opt-in and must never start hidden automation.
 
 ## Scanner Safety Policy
 

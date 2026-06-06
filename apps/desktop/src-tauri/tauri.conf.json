@@ -14,16 +14,15 @@
       {
         "label": "main",
         "title": "Genshin Artifact Assistant",
-        "width": 460,
-        "height": 720,
-        "minWidth": 380,
-        "minHeight": 520,
+        "width": 860,
+        "height": 760,
+        "minWidth": 420,
+        "minHeight": 560,
         "resizable": true,
-        "decorations": false,
-        "alwaysOnTop": true,
-        "center": false,
-        "x": 32,
-        "y": 72
+        "decorations": true,
+        "alwaysOnTop": false,
+        "visible": false,
+        "center": true
       },
       {
         "label": "roi-overlay",
@@ -38,7 +37,7 @@
         "transparent": true,
         "alwaysOnTop": true,
         "skipTaskbar": true,
-        "visible": true,
+        "visible": false,
         "focus": false,
         "x": 0,
         "y": 0
@@ -47,19 +46,31 @@
         "label": "assistant-bubble",
         "title": "Artifact Assistant Bubble",
         "url": "index.html?window=assistant-bubble",
-        "width": 340,
-        "height": 220,
-        "minWidth": 260,
-        "minHeight": 120,
+        "width": 72,
+        "height": 72,
         "resizable": false,
         "decorations": false,
         "transparent": true,
         "alwaysOnTop": true,
         "skipTaskbar": true,
-        "visible": true,
+        "visible": false,
         "focus": false,
-        "x": 1520,
-        "y": 120
+        "x": 32,
+        "y": 72
+      },
+      {
+        "label": "fixture-playground",
+        "title": "Fixture Playground",
+        "url": "index.html?window=fixture-playground&fixture=character-plus20",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 960,
+        "minHeight": 600,
+        "resizable": true,
+        "decorations": true,
+        "alwaysOnTop": false,
+        "visible": false,
+        "center": true
       }
     ],
     "security": {

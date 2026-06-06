@@ -1,44 +1,143 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Eye, Maximize2, Move, ScanLine, SlidersHorizontal, Square } from "lucide-react";
 import { ScannerArtifactResult } from "@ri-genshin/artifact-schema";
+import { AssistantBubbleSurface } from "./AssistantBubbleSurface";
 import { buildAssistantSummary } from "./assistantSummary";
-import { classifyRegionArtifact, scanRegionArtifact } from "./scanner";
+import {
+  assistantWindowRect,
+  getAssistantWindowBounds,
+  lockRoiEditor,
+  openRoiEditor,
+  quitApp,
+  showMainWindow,
+  startAssistantDrag,
+  syncAssistantWindowBounds
+} from "./nativeWindows";
+import { classifyRegionArtifact, scanRegionArtifact, scannerStatus, ScannerStatus } from "./scanner";
 import {
   loadLatestScannerResult,
-  loadRoiOpacity,
   loadScanRegion,
-  nextRoiOpacity,
-  RoiOpacity,
-  saveLatestScannerResult,
-  saveRoiEditMode,
-  saveRoiOpacity
+  saveLatestScannerResult
 } from "./roi";
+import {
+  applyScannerCorrection,
+  ArtifactMainStatCorrection,
+  ArtifactSlotCorrection,
+  getScannerCorrectionState
+} from "./scannerCorrection";
+import {
+  clearAssistantPlacement,
+  loadAssistantPlacement,
+  placementFromPhysicalPosition,
+  saveAssistantPlacement
+} from "./assistantPlacement";
+import { loadEvaluationProfile } from "./evaluationProfile";
+import { useSharedWatchState } from "./assistantRuntimeState";
 
 export function AssistantBubbleApp() {
   const [result, setResult] = useState<ScannerArtifactResult | null>(loadLatestScannerResult);
   const [region, setRegion] = useState(loadScanRegion);
-  const [opacity, setOpacity] = useState<RoiOpacity>(loadRoiOpacity);
-  const [watching, setWatching] = useState(false);
+  const [status, setStatus] = useState<ScannerStatus | null>(null);
+  const [watching, setWatching] = useSharedWatchState();
   const [busy, setBusy] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [error, setError] = useState("");
+  const [manualLevel, setManualLevel] = useState(0);
+  const [manualSlotKey, setManualSlotKey] = useState<ArtifactSlotCorrection>("flower");
+  const [manualMainStatKey, setManualMainStatKey] = useState<ArtifactMainStatCorrection>("hp");
+  const [placement, setPlacement] = useState(loadAssistantPlacement);
+  const [profile, setProfile] = useState(loadEvaluationProfile);
   const busyRef = useRef(false);
   const pollingRef = useRef(false);
   const lastHashRef = useRef<string | null>(result?.capture.regionHash ?? null);
-  const summary = useMemo(() => buildAssistantSummary(result), [result]);
+  const summary = useMemo(() => buildAssistantSummary(result, profile), [profile, result]);
+  const correction = useMemo(() => getScannerCorrectionState(result), [result]);
+  const statusRef = useRef(status);
+  const draggingRef = useRef(false);
+  const dragSettledTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
 
   useEffect(() => {
     const id = window.setInterval(() => {
       const storedRegion = loadScanRegion();
       setRegion((current) => (sameRegion(current, storedRegion) ? current : storedRegion));
-      setOpacity(loadRoiOpacity());
       const stored = loadLatestScannerResult();
       setResult((current) => (sameResult(current, stored) ? current : stored));
+      const storedProfile = loadEvaluationProfile();
+      setProfile((current) => (current.id === storedProfile.id ? current : storedProfile));
     }, 500);
 
     return () => window.clearInterval(id);
   }, []);
+
+  useEffect(() => {
+    if (!isTauri()) {
+      return undefined;
+    }
+
+    let unlisten: (() => void) | undefined;
+    void getCurrentWindow()
+      .onMoved(() => {
+        if (!draggingRef.current) {
+          return;
+        }
+        schedulePersistAssistantPosition();
+      })
+      .then((dispose) => {
+        unlisten = dispose;
+      })
+      .catch((caught) => setError(caught instanceof Error ? caught.message : "Unable to track assistant position."));
+
+    return () => {
+      unlisten?.();
+      clearDragSettledTimer();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isTauri()) {
+      return undefined;
+    }
+
+    let ignore = false;
+    async function refreshStatus() {
+      try {
+        const next = await scannerStatus();
+        if (!ignore) {
+          setStatus((current) => (sameStatus(current, next) ? current : next));
+        }
+      } catch (caught) {
+        if (!ignore) {
+          setError(caught instanceof Error ? caught.message : "Scanner status unavailable.");
+        }
+      }
+    }
+
+    void refreshStatus();
+    const id = window.setInterval(() => void refreshStatus(), 1500);
+    return () => {
+      ignore = true;
+      window.clearInterval(id);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isTauri()) {
+      return;
+    }
+    if (draggingRef.current) {
+      return;
+    }
+
+    void syncAssistantWindowBounds(assistantWindowRect(status, region, collapsed, detailsOpen, window.devicePixelRatio, placement)).catch((caught) => {
+      setError(caught instanceof Error ? caught.message : "Unable to resize assistant.");
+    });
+  }, [collapsed, detailsOpen, placement, region, status]);
 
   useEffect(() => {
     if (!watching) {
@@ -72,7 +171,8 @@ export function AssistantBubbleApp() {
     }
 
     try {
-      const scan = await scanRegionArtifact(region);
+      await lockRoiEditor().catch(() => undefined);
+      const scan = await scanRegionArtifact(region, { occlusionAvoided: true });
       lastHashRef.current = scan.capture.regionHash ?? null;
       setResult(scan);
       saveLatestScannerResult(scan);
@@ -113,81 +213,145 @@ export function AssistantBubbleApp() {
     }
   }
 
-  function editRoi() {
-    saveRoiEditMode(true);
-    saveRoiOpacity("visible");
-    setOpacity("visible");
-  }
-
-  function cycleOpacity() {
-    const next = nextRoiOpacity(opacity);
-    saveRoiOpacity(next);
-    setOpacity(next);
+  async function editRoi() {
+    try {
+      const next = status?.available ? status : await scannerStatus();
+      setStatus(next);
+      await openRoiEditor(next);
+      setError("");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to open ROI editor.");
+    }
   }
 
   async function openPanel() {
     try {
-      await invoke("show_main_window");
-    } catch {
-      setError("Main panel unavailable");
+      await showMainWindow();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Main panel unavailable");
     }
   }
 
   async function dragBubble() {
+    if (draggingRef.current) {
+      return;
+    }
     try {
-      await getCurrentWindow().startDragging();
-    } catch {
-      // Browser preview has no native window handle.
+      draggingRef.current = true;
+      clearDragSettledTimer();
+      await startAssistantDrag();
+      window.setTimeout(() => {
+        if (draggingRef.current) {
+          void persistAssistantPositionAfterDrag();
+        }
+      }, 900);
+    } catch (caught) {
+      draggingRef.current = false;
+      setError(caught instanceof Error ? caught.message : "Unable to move assistant.");
     }
   }
 
+  function schedulePersistAssistantPosition() {
+    clearDragSettledTimer();
+    dragSettledTimerRef.current = window.setTimeout(() => {
+      void persistAssistantPositionAfterDrag();
+    }, 180);
+  }
+
+  function clearDragSettledTimer() {
+    if (dragSettledTimerRef.current !== null) {
+      window.clearTimeout(dragSettledTimerRef.current);
+      dragSettledTimerRef.current = null;
+    }
+  }
+
+  async function persistAssistantPositionAfterDrag() {
+    clearDragSettledTimer();
+    const currentStatus = statusRef.current;
+    if (!currentStatus?.available) {
+      draggingRef.current = false;
+      return;
+    }
+
+    try {
+      const bounds = await getAssistantWindowBounds();
+      const next = placementFromPhysicalPosition(bounds, currentStatus);
+      if (next) {
+        saveAssistantPlacement(next);
+        setPlacement(next);
+      }
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to save assistant position.");
+    } finally {
+      draggingRef.current = false;
+    }
+  }
+
+  async function handleQuit() {
+    try {
+      await quitApp();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to quit app.");
+    }
+  }
+
+  function resetPosition() {
+    clearAssistantPlacement();
+    setPlacement(null);
+  }
+
+  function applyManualCorrection() {
+    if (!result || !correction.available) {
+      return;
+    }
+
+    const corrected = applyScannerCorrection(result, {
+      level: manualLevel,
+      slotKey: manualSlotKey,
+      mainStatKey: manualMainStatKey
+    });
+    setResult(corrected);
+    saveLatestScannerResult(corrected);
+    setError("");
+  }
+
   return (
-    <main className={`assistant-bubble assistant-bubble--${summary.state}`}>
-      <header className="assistant-bubble__header">
-        <button className="icon-button" title="Move" onPointerDown={() => void dragBubble()}>
-          <Move size={15} />
-        </button>
-        <div>
-          <b>{summary.title}</b>
-          <span>{error || summary.detail}</span>
-        </div>
-      </header>
-
-      {summary.metrics.length > 0 ? (
-        <div className="assistant-metrics">
-          {summary.metrics.map((metric) => (
-            <div key={metric.label}>
-              <span>{metric.label}</span>
-              <b>{metric.value}</b>
-            </div>
-          ))}
-        </div>
-      ) : null}
-
-      <footer className="assistant-actions">
-        <button className="primary" onClick={() => void scanNow()} disabled={busy}>
-          <ScanLine size={15} />
-          {busy ? "OCR" : "Scan"}
-        </button>
-        <button onClick={() => setWatching((value) => !value)}>
-          {watching ? <Square size={15} /> : <Eye size={15} />}
-          {watching ? "Stop" : "Watch"}
-        </button>
-        <button onClick={editRoi}>
-          <SlidersHorizontal size={15} />
-          ROI
-        </button>
-        <button onClick={cycleOpacity}>{opacity}</button>
-        <button className="icon-button" title="Open Panel" onClick={() => void openPanel()}>
-          <Maximize2 size={15} />
-        </button>
-      </footer>
-
-      <div className="assistant-footnote">
-        <span>Conf {summary.confidence}</span>
-        <span>{result?.capture.regionHash ? result.capture.regionHash.slice(0, 8) : "no hash"}</span>
-      </div>
-    </main>
+    <AssistantBubbleSurface
+      summary={summary}
+      collapsed={collapsed}
+      busy={busy}
+      watching={watching}
+      detailsOpen={detailsOpen}
+      error={error}
+      hash={result?.capture.regionHash ?? ""}
+      levelCorrection={
+        correction.available
+          ? {
+              available: true,
+              level: manualLevel,
+              slotKey: manualSlotKey,
+              mainStatKey: manualMainStatKey,
+              reason: correction.reason,
+              needsLevel: correction.needsLevel,
+              needsSlotKey: correction.needsSlotKey,
+              needsMainStatKey: correction.needsMainStatKey,
+              onLevelChange: setManualLevel,
+              onSlotKeyChange: setManualSlotKey,
+              onMainStatKeyChange: setManualMainStatKey,
+              onApply: applyManualCorrection
+            }
+          : undefined
+      }
+      onToggleCollapsed={() => setCollapsed((value) => !value)}
+      onScan={() => void scanNow()}
+      onToggleWatch={() => setWatching((value) => !value)}
+      onEditRoi={() => void editRoi()}
+      onToggleDetails={() => setDetailsOpen((value) => !value)}
+      onOpenPanel={() => void openPanel()}
+      onMove={() => void dragBubble()}
+      onResetPosition={resetPosition}
+      onQuit={() => void handleQuit()}
+    />
   );
 }
 
@@ -197,4 +361,15 @@ function sameResult(left: ScannerArtifactResult | null, right: ScannerArtifactRe
 
 function sameRegion(left: ReturnType<typeof loadScanRegion>, right: ReturnType<typeof loadScanRegion>): boolean {
   return left.x === right.x && left.y === right.y && left.width === right.width && left.height === right.height && left.unit === right.unit;
+}
+
+function sameStatus(left: ScannerStatus | null, right: ScannerStatus): boolean {
+  return (
+    left?.available === right.available &&
+    left?.screenX === right.screenX &&
+    left?.screenY === right.screenY &&
+    left?.clientWidth === right.clientWidth &&
+    left?.clientHeight === right.clientHeight &&
+    left?.error === right.error
+  );
 }

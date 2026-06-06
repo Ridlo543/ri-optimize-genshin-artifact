@@ -78,6 +78,29 @@ describe("GOOD artifact import", () => {
     expect(normalized.skipReason).toContain("outside supported range");
   });
 
+  it.each([
+    { rarity: 2, level: 4 },
+    { rarity: 3, level: 12 },
+    { rarity: 4, level: 16 },
+    { rarity: 5, level: 20 }
+  ])("accepts rarity $rarity artifact at its max level +$level", ({ rarity, level }) => {
+    const mapped = goodArtifactToArtifactInput(plumeArtifact({ rarity, level }));
+
+    expect(mapped.rarity).toBe(rarity);
+    expect(mapped.level).toBe(level);
+  });
+
+  it.each([
+    { rarity: 2, level: 5, max: 4 },
+    { rarity: 3, level: 13, max: 12 },
+    { rarity: 4, level: 17, max: 16 }
+  ])("rejects rarity $rarity artifact above max level", ({ rarity, level, max }) => {
+    const normalized = normalizeGoodArtifact(plumeArtifact({ rarity, level }));
+
+    expect(normalized.artifact).toBeNull();
+    expect(normalized.skipReason).toContain(`exceeds max +${max}`);
+  });
+
   it("rejects multiple real unactivated substats instead of guessing which one is visible", () => {
     const normalized = normalizeGoodArtifact(
       plumeArtifact({

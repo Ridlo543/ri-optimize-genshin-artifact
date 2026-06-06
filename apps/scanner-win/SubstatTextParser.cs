@@ -112,10 +112,13 @@ internal static partial class SubstatTextParser
             .Replace("#", "+", StringComparison.Ordinal)
             .Replace("“", string.Empty, StringComparison.Ordinal)
             .Replace("”", string.Empty, StringComparison.Ordinal)
+            .Replace("‘", string.Empty, StringComparison.Ordinal)
+            .Replace("’", string.Empty, StringComparison.Ordinal)
             .Replace("\"", string.Empty, StringComparison.Ordinal)
             .Replace(" ", string.Empty, StringComparison.Ordinal)
             .Trim();
-        return Regex.Replace(normalized, @"^[^A-Za-z]+", string.Empty);
+        normalized = Regex.Replace(normalized, @"^[^A-Za-z]+", string.Empty);
+        return Regex.Replace(normalized, @"[^A-Za-z0-9.%()]+$", string.Empty);
     }
 
     private static string NormalizeLabel(string label)

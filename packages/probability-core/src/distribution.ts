@@ -1,5 +1,5 @@
-import { ArtifactInput, StatType } from "@ri-genshin/artifact-schema";
-import { MINOR_AFFIX_WEIGHTS, MINOR_ROLL_VALUES_5_STAR, MINOR_STATS, UPGRADE_MILESTONES } from "./constants";
+import { ArtifactInput, ArtifactLevel, ArtifactRarity, StatType } from "@ri-genshin/artifact-schema";
+import { MINOR_AFFIX_WEIGHTS, MINOR_ROLL_VALUES_BY_RARITY, MINOR_STATS, UPGRADE_MILESTONES_BY_RARITY } from "./constants";
 
 export interface WeightedStat {
   stat: StatType;
@@ -23,17 +23,14 @@ export function getNewSubstatDistribution(artifact: ArtifactInput): WeightedStat
   }));
 }
 
-export function getRollValues(stat: StatType, rarity: number): number[] {
-  if (rarity !== 5) {
-    throw new Error("MVP supports 5-star roll values only.");
-  }
-  const values = MINOR_ROLL_VALUES_5_STAR[stat];
+export function getRollValues(stat: StatType, rarity: ArtifactRarity): number[] {
+  const values = MINOR_ROLL_VALUES_BY_RARITY[rarity]?.[stat];
   if (!values) {
-    throw new Error(`No minor roll values for ${stat}.`);
+    throw new Error(`No minor roll values for ${rarity}-star ${stat}.`);
   }
   return values;
 }
 
-export function getRemainingMilestones(level: ArtifactInput["level"]): Array<4 | 8 | 12 | 16 | 20> {
-  return UPGRADE_MILESTONES.filter((milestone) => milestone > level);
+export function getRemainingMilestones(level: ArtifactInput["level"], rarity: ArtifactRarity = 5): ArtifactLevel[] {
+  return UPGRADE_MILESTONES_BY_RARITY[rarity].filter((milestone) => milestone > level);
 }

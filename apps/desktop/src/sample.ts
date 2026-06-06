@@ -1,5 +1,22 @@
 import { ScannerArtifactResult } from "@ri-genshin/artifact-schema";
 
+export const IDLE_SCAN_RESULT: ScannerArtifactResult = {
+  source: "screen",
+  mode: "region-classification",
+  confidence: {},
+  artifact: null,
+  screenState: {
+    code: "game-not-found",
+    readyForArtifactOcr: false,
+    confidence: 0,
+    message: "No analysis has run yet. Open Genshin, set the ROI, then click Analyze."
+  },
+  capture: {
+    resolution: "unknown",
+    capturedAt: new Date().toISOString()
+  }
+};
+
 export const SAMPLE_SCAN_RESULT: ScannerArtifactResult = {
   source: "fixture",
   mode: "visible-artifact",

@@ -105,16 +105,27 @@ internal static class ScannerCommands
         }
 
         ScanRegion region = ParseRegionArg(args);
+        bool occlusionAvoided = args.Contains("--occlusion-avoided", StringComparer.OrdinalIgnoreCase);
         using Bitmap windowBitmap = ScreenCapture.CaptureClient(window);
-        Directory.CreateDirectory(Path.Combine("logs", "scanner"));
-        string screenshotPath = Path.Combine("logs", "scanner", "region-source-last.png");
-        string regionPath = Path.Combine("logs", "scanner", "region-last.png");
-        windowBitmap.Save(screenshotPath, ImageFormat.Png);
+        ScannerLogPaths paths = ScannerPaths.CreateScannerLogPaths("region");
+        windowBitmap.Save(paths.LastSourcePath, ImageFormat.Png);
+        windowBitmap.Save(paths.SnapshotSourcePath, ImageFormat.Png);
 
         using OcrTextReader reader = new();
         ArtifactOcrService service = new(reader);
         ArtifactRegionParser parser = new(service);
-        return parser.ParseBitmap(windowBitmap, region, "screen", "region-artifact", Path.GetFullPath(screenshotPath), Path.GetFullPath(regionPath), writeDebugImage: true);
+        ScanResult result = parser.ParseBitmap(
+            windowBitmap,
+            region,
+            "screen",
+            "region-artifact",
+            Path.GetFullPath(paths.SnapshotSourcePath),
+            Path.GetFullPath(paths.SnapshotRegionPath),
+            paths.ScanId,
+            occlusionAvoided,
+            writeDebugImage: true);
+        CopyIfExists(paths.SnapshotRegionPath, paths.LastRegionPath);
+        return result;
     }
 
     private static object ClassifyRegionArtifact(string[] args)
@@ -126,12 +137,20 @@ internal static class ScannerCommands
 
         ScanRegion region = ParseRegionArg(args);
         using Bitmap windowBitmap = ScreenCapture.CaptureClient(window);
-        Directory.CreateDirectory(Path.Combine("logs", "scanner"));
-        string screenshotPath = Path.Combine("logs", "scanner", "region-classification-source-last.png");
-        string regionPath = Path.Combine("logs", "scanner", "region-classification-last.png");
-        windowBitmap.Save(screenshotPath, ImageFormat.Png);
+        ScannerLogPaths paths = ScannerPaths.CreateScannerLogPaths("region-classification");
+        windowBitmap.Save(paths.LastSourcePath, ImageFormat.Png);
+        windowBitmap.Save(paths.SnapshotSourcePath, ImageFormat.Png);
 
-        return ArtifactRegionParser.ClassifyBitmap(windowBitmap, region, "screen", "region-classification", Path.GetFullPath(screenshotPath), Path.GetFullPath(regionPath));
+        ScanResult result = ArtifactRegionParser.ClassifyBitmap(
+            windowBitmap,
+            region,
+            "screen",
+            "region-classification",
+            Path.GetFullPath(paths.SnapshotSourcePath),
+            Path.GetFullPath(paths.SnapshotRegionPath),
+            paths.ScanId);
+        CopyIfExists(paths.SnapshotRegionPath, paths.LastRegionPath);
+        return result;
     }
 
     private static object OcrSubstats(string[] args)
@@ -295,5 +314,13 @@ internal static class ScannerCommands
         }
 
         return ScanRegionParser.Parse(args[optionIndex + 1]);
+    }
+
+    private static void CopyIfExists(string sourcePath, string destinationPath)
+    {
+        if (File.Exists(sourcePath))
+        {
+            File.Copy(sourcePath, destinationPath, overwrite: true);
+        }
     }
 }

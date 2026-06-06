@@ -66,6 +66,15 @@ internal sealed class ScanResult
     [JsonPropertyName("artifact")]
     public GoodArtifact? Artifact { get; init; }
 
+    [JsonPropertyName("artifactDraft")]
+    public GoodArtifactDraft? ArtifactDraft { get; init; }
+
+    [JsonPropertyName("missingFields")]
+    public List<string>? MissingFields { get; init; }
+
+    [JsonPropertyName("optionalWarnings")]
+    public List<string>? OptionalWarnings { get; init; }
+
     [JsonPropertyName("screenState")]
     public ScreenStateInfo? ScreenState { get; init; }
 
@@ -108,6 +117,9 @@ internal sealed class Confidence
 
 internal sealed class CaptureInfo
 {
+    [JsonPropertyName("scanId")]
+    public string? ScanId { get; init; }
+
     [JsonPropertyName("resolution")]
     public required string Resolution { get; init; }
 
@@ -134,6 +146,9 @@ internal sealed class CaptureInfo
 
     [JsonPropertyName("region")]
     public ScanRegion? Region { get; init; }
+
+    [JsonPropertyName("occlusionAvoided")]
+    public bool OcclusionAvoided { get; init; }
 
     public static CaptureInfo Unavailable() => new()
     {
@@ -218,6 +233,39 @@ internal sealed class GoodArtifact
     public string? Location { get; init; }
 }
 
+internal sealed class GoodArtifactDraft
+{
+    [JsonPropertyName("id")]
+    public object? Id { get; init; }
+
+    [JsonPropertyName("setKey")]
+    public string? SetKey { get; init; }
+
+    [JsonPropertyName("slotKey")]
+    public string? SlotKey { get; init; }
+
+    [JsonPropertyName("rarity")]
+    public int? Rarity { get; init; }
+
+    [JsonPropertyName("level")]
+    public int? Level { get; init; }
+
+    [JsonPropertyName("mainStatKey")]
+    public string? MainStatKey { get; init; }
+
+    [JsonPropertyName("substats")]
+    public List<GoodSubstat>? Substats { get; init; }
+
+    [JsonPropertyName("unactivatedSubstats")]
+    public List<GoodSubstat>? UnactivatedSubstats { get; init; }
+
+    [JsonPropertyName("lock")]
+    public bool? Lock { get; init; }
+
+    [JsonPropertyName("location")]
+    public string? Location { get; init; }
+}
+
 internal sealed class GoodSubstat
 {
     [JsonPropertyName("key")]
@@ -285,6 +333,24 @@ internal sealed class ScanDiagnostics
 
     [JsonPropertyName("mismatches")]
     public List<string> Mismatches { get; init; } = [];
+
+    [JsonPropertyName("setIdentity")]
+    public SetIdentityDiagnostics? SetIdentity { get; init; }
+}
+
+internal sealed class SetIdentityDiagnostics
+{
+    [JsonPropertyName("rawItemName")]
+    public string? RawItemName { get; init; }
+
+    [JsonPropertyName("rawSetDisplayName")]
+    public string? RawSetDisplayName { get; init; }
+
+    [JsonPropertyName("matchedSetKey")]
+    public string? MatchedSetKey { get; init; }
+
+    [JsonPropertyName("matchSource")]
+    public required string MatchSource { get; init; }
 }
 
 internal sealed class FixtureArtifactParseResult

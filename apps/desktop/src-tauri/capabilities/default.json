@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Default permissions for the main desktop window",
-  "windows": ["main", "roi-overlay", "assistant-bubble"],
+  "windows": ["main", "roi-overlay", "assistant-bubble", "fixture-playground"],
   "permissions": [
     "core:default",
     {

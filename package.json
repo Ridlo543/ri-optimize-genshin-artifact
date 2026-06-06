@@ -6,15 +6,19 @@
   "scripts": {
     "build": "pnpm -r --if-present build && dotnet build apps/scanner-win/GenshinArtifactScanner.Win.csproj",
     "test": "pnpm -r --if-present test",
+    "test:ui": "pnpm --filter @ri-genshin/desktop test:e2e",
     "dev:desktop": "pnpm --filter @ri-genshin/desktop dev",
-    "tauri:dev": "pnpm --filter @ri-genshin/desktop tauri dev",
+    "tauri:dev": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/tauri-dev.ps1",
+    "tauri:smoke": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-native-windows.ps1",
     "scanner:publish:tauri": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/publish-scanner-sidecar.ps1",
     "scanner:status": "dotnet run --project apps/scanner-win/GenshinArtifactScanner.Win.csproj -- status",
     "scanner:sample": "dotnet run --project apps/scanner-win/GenshinArtifactScanner.Win.csproj -- sample",
     "scanner:classify": "dotnet run --project apps/scanner-win/GenshinArtifactScanner.Win.csproj -- classify-visible-screen",
     "scanner:scan": "dotnet run --project apps/scanner-win/GenshinArtifactScanner.Win.csproj -- scan-visible-artifact",
     "scanner:screenshot": "dotnet run --project apps/scanner-win/GenshinArtifactScanner.Win.csproj -- parse-screenshot-artifact data/fixtures/screenshots/bag-inventory-raw-1920x1200.png",
-    "scanner:screenshots": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-screenshot-fixtures.ps1"
+    "scanner:screenshots": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-screenshot-fixtures.ps1",
+    "scanner:regions": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-region-fixtures.ps1",
+    "scanner:manual-logs": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-manual-log-fixtures.ps1"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

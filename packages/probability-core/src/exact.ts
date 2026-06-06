@@ -1,7 +1,15 @@
 import { ArtifactInput, StatType, SubstatInput } from "@ri-genshin/artifact-schema";
 import { getNewSubstatDistribution, getRemainingMilestones, getRollValues } from "./distribution";
 import { recommendArtifact, Recommendation } from "./recommendation";
-import { calculateCV, calculateWeightedScore, round, ScoringProfile } from "./scoring";
+import {
+  assessMainStatFit,
+  calculateCV,
+  calculateUsefulRollValue,
+  calculateWeightedScore,
+  MainStatFit,
+  round,
+  ScoringProfile
+} from "./scoring";
 import { validateArtifact } from "./validation";
 
 export interface OutcomeState {
@@ -11,11 +19,31 @@ export interface OutcomeState {
 }
 
 export interface ProbabilityResult {
+  /** @deprecated Use usefulRollValue for profile-based decisions. */
   currentScore: number;
+  /** @deprecated Use knownCritValue. */
   currentCV: number;
+  activeCritValue: number;
+  knownCritValue: number;
+  expectedFinalCritValue: number;
+  usefulRollValue: number;
+  activeUsefulRollValue: number;
+  expectedFinalUsefulRollValue: number;
+  probabilityReachProfileTarget: number;
+  modelVersion: string;
+  profileContext: {
+    id: string;
+    name: string;
+    targetUsefulRollValue: number;
+    mainStatFit: MainStatFit;
+    setFit: "not-evaluated";
+  };
+  /** @deprecated Legacy raw weighted score for advanced diagnostics. */
   expectedFinalScore: number;
+  /** @deprecated Use expectedFinalCritValue. */
   expectedFinalCV: number;
   probabilityByTargetRollCount: Record<number, number>;
+  /** @deprecated Legacy raw weighted-score thresholds for advanced diagnostics. */
   probabilityReachScoreThreshold: Record<number, number>;
   probabilityReachCVThreshold: Record<number, number>;
   remainingUpgradeEvents: number;
@@ -30,6 +58,7 @@ export interface EvaluationOptions {
 
 const DEFAULT_SCORE_THRESHOLDS = [20, 25, 30, 35, 40];
 const DEFAULT_CV_THRESHOLDS = [20, 25, 30, 35, 40];
+export const PROBABILITY_MODEL_VERSION = "artifact-exact-v2";
 
 export function evaluateArtifactExact(
   artifact: ArtifactInput,
@@ -50,12 +79,19 @@ export function evaluateArtifactExact(
 
   let expectedFinalScore = 0;
   let expectedFinalCV = 0;
+  let expectedFinalUsefulRollValue = 0;
+  let probabilityReachProfileTarget = 0;
 
   for (const outcome of outcomes) {
     const score = calculateWeightedScore(outcome.artifact, profile, false);
     const cv = calculateCV(outcome.artifact.substats, false);
+    const usefulRollValue = calculateUsefulRollValue(outcome.artifact, profile, false);
     expectedFinalScore += score * outcome.probability;
     expectedFinalCV += cv * outcome.probability;
+    expectedFinalUsefulRollValue += usefulRollValue * outcome.probability;
+    if (usefulRollValue >= profile.thresholds.goodUsefulRollValue) {
+      probabilityReachProfileTarget += outcome.probability;
+    }
     probabilityByTargetRollCount[outcome.targetRolls] = (probabilityByTargetRollCount[outcome.targetRolls] ?? 0) + outcome.probability;
 
     for (const threshold of scoreThresholds) {
@@ -70,25 +106,40 @@ export function evaluateArtifactExact(
     }
   }
 
-  const remainingUpgradeEvents = getRemainingMilestones(artifact.level).filter((milestone) => {
-    if (milestone === 4 && artifact.substats.filter((substat) => substat.active).length < 4) {
-      return false;
-    }
-    return true;
-  }).length;
+  const remainingUpgradeEvents = countRemainingStatRollEvents(artifact);
+  const activeCritValue = calculateCV(artifact.substats, false);
+  const knownCritValue = calculateCV(artifact.substats, true);
+  const usefulRollValue = calculateUsefulRollValue(artifact, profile, true);
+  const activeUsefulRollValue = calculateUsefulRollValue(artifact, profile, false);
 
   const resultForRecommendation = {
     currentScore: calculateWeightedScore(artifact, profile, true),
-    currentCV: calculateCV(artifact.substats, true),
+    currentCV: knownCritValue,
+    activeCritValue,
+    knownCritValue,
+    usefulRollValue,
+    expectedFinalUsefulRollValue: round(expectedFinalUsefulRollValue, 3),
+    probabilityReachProfileTarget: round(probabilityReachProfileTarget, 8),
     expectedFinalScore: round(expectedFinalScore, 3),
     expectedFinalCV: round(expectedFinalCV, 3),
     probabilityReachScoreThreshold: roundRecord(probabilityReachScoreThreshold, 8),
     probabilityReachCVThreshold: roundRecord(probabilityReachCVThreshold, 8),
-    remainingUpgradeEvents
+    remainingUpgradeEvents,
+    rarity: artifact.rarity
   };
 
   return {
     ...resultForRecommendation,
+    activeUsefulRollValue,
+    expectedFinalCritValue: resultForRecommendation.expectedFinalCV,
+    modelVersion: PROBABILITY_MODEL_VERSION,
+    profileContext: {
+      id: profile.id,
+      name: profile.name,
+      targetUsefulRollValue: profile.thresholds.goodUsefulRollValue,
+      mainStatFit: assessMainStatFit(artifact, profile),
+      setFit: "not-evaluated"
+    },
     probabilityByTargetRollCount: roundRecord(probabilityByTargetRollCount, 8),
     outcomeCount: outcomes.length,
     recommendation: recommendArtifact(resultForRecommendation, profile)
@@ -104,7 +155,7 @@ export function enumerateOutcomes(initial: ArtifactInput, targetStats: StatType[
     }
   ];
 
-  for (const milestone of getRemainingMilestones(initial.level)) {
+  for (const milestone of getRemainingMilestones(initial.level, initial.rarity)) {
     const nextStates: OutcomeState[] = [];
 
     for (const state of states) {
@@ -133,7 +184,7 @@ export function enumerateOutcomes(initial: ArtifactInput, targetStats: StatType[
               artifact.level = milestone;
               nextStates.push({
                 artifact,
-                probability: state.probability * candidate.probability * 0.25,
+                probability: state.probability * candidate.probability * (1 / rollValues.length),
                 targetRolls: state.targetRolls
               });
             }
@@ -145,7 +196,8 @@ export function enumerateOutcomes(initial: ArtifactInput, targetStats: StatType[
           if (!selected) {
             continue;
           }
-          for (const value of getRollValues(selected.stat, state.artifact.rarity)) {
+          const rollValues = getRollValues(selected.stat, state.artifact.rarity);
+          for (const value of rollValues) {
             const artifact = cloneArtifact(state.artifact);
             const activeIndexes = artifact.substats
               .map((substat, index) => ({ substat, index }))
@@ -162,7 +214,7 @@ export function enumerateOutcomes(initial: ArtifactInput, targetStats: StatType[
             artifact.level = milestone;
             nextStates.push({
               artifact,
-              probability: state.probability * 0.25 * 0.25,
+              probability: state.probability * (1 / active.length) * (1 / rollValues.length),
               targetRolls: state.targetRolls + (targetStats.includes(selected.stat) ? 1 : 0)
             });
           }
@@ -174,6 +226,25 @@ export function enumerateOutcomes(initial: ArtifactInput, targetStats: StatType[
   }
 
   return states;
+}
+
+function countRemainingStatRollEvents(artifact: ArtifactInput): number {
+  let activeCount = artifact.substats.filter((substat) => substat.active).length;
+  let inactiveCount = artifact.substats.length - activeCount;
+  let rollEvents = 0;
+
+  for (const milestone of getRemainingMilestones(artifact.level, artifact.rarity)) {
+    if (activeCount < 4) {
+      if (inactiveCount > 0) {
+        inactiveCount -= 1;
+      }
+      activeCount += 1;
+    } else {
+      rollEvents += 1;
+    }
+  }
+
+  return rollEvents;
 }
 
 function cloneArtifact(artifact: ArtifactInput): ArtifactInput {
