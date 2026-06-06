@@ -85,6 +85,57 @@ $fixtures = @(
         ExpectSetKey = "DisenchantmentInDeepShadow"
     },
     @{
+        Name = "GenshinImpact_WGHmIpkN58.jpg"
+        Region = $bagRegion
+        SlotKey = "sands"
+        MainStatKey = "atk_"
+        Level = 20
+        Rarity = 5
+        Substats = 4
+        ExpectSetKey = "ObsidianCodex"
+        ExpectedSubstats = @(
+            @{ Key = "critRate_"; Value = 6.6 },
+            @{ Key = "hp_"; Value = 9.3 },
+            @{ Key = "critDMG_"; Value = 15.5 },
+            @{ Key = "def"; Value = 42 }
+        )
+    },
+    @{
+        Name = "GenshinImpact_zuCNecgQiu.jpg"
+        Region = $bagRegion
+        SlotKey = "sands"
+        MainStatKey = "atk_"
+        Level = 0
+        Rarity = 5
+        Substats = 3
+        Unactivated = 1
+        ExpectSetKey = "DisenchantmentInDeepShadow"
+        ExpectedSubstats = @(
+            @{ Key = "hp"; Value = 239 },
+            @{ Key = "critDMG_"; Value = 7.8 },
+            @{ Key = "atk"; Value = 14 }
+        )
+        ExpectedUnactivatedSubstats = @(
+            @{ Key = "def_"; Value = 5.1 }
+        )
+    },
+    @{
+        Name = "iTPXIcUjaV.png"
+        Region = $bagRegion
+        SlotKey = "flower"
+        MainStatKey = "hp"
+        Level = 20
+        Rarity = 5
+        Substats = 4
+        ExpectSetKey = "CelestialGift"
+        ExpectedSubstats = @(
+            @{ Key = "critRate_"; Value = 10.5 },
+            @{ Key = "enerRech_"; Value = 6.5 },
+            @{ Key = "def"; Value = 23 },
+            @{ Key = "hp_"; Value = 16.3 }
+        )
+    },
+    @{
         Name = "success_artifact_bag_detail_1_level0.png"
         Region = $bagRegion
         SlotKey = "plume"
@@ -116,6 +167,19 @@ function Convert-ScannerOutputToJson($rawOutput) {
     }
 
     return $text.Substring($start, $end - $start + 1) | ConvertFrom-Json
+}
+
+function Assert-Substats($fixtureName, $label, $actualSubstats, $expectedSubstats) {
+    for ($index = 0; $index -lt $expectedSubstats.Count; $index++) {
+        $expectedSubstat = $expectedSubstats[$index]
+        $actualSubstat = $actualSubstats[$index]
+        if ($actualSubstat.key -ne $expectedSubstat.Key) {
+            throw "$fixtureName ${label}[$index] key expected $($expectedSubstat.Key), got $($actualSubstat.key)"
+        }
+        if ([Math]::Abs([double]$actualSubstat.value - [double]$expectedSubstat.Value) -gt 0.05) {
+            throw "$fixtureName ${label}[$index] value expected $($expectedSubstat.Value), got $($actualSubstat.value)"
+        }
+    }
 }
 
 foreach ($fixture in $fixtures) {
@@ -154,20 +218,13 @@ foreach ($fixture in $fixtures) {
         throw "$($fixture.Name) substats expected $($fixture.Substats), got $($result.artifact.substats.Count)"
     }
     if ($fixture.ContainsKey("ExpectedSubstats")) {
-        $actualSubstats = @($result.artifact.substats)
-        for ($index = 0; $index -lt $fixture.ExpectedSubstats.Count; $index++) {
-            $expectedSubstat = $fixture.ExpectedSubstats[$index]
-            $actualSubstat = $actualSubstats[$index]
-            if ($actualSubstat.key -ne $expectedSubstat.Key) {
-                throw "$($fixture.Name) substat[$index] key expected $($expectedSubstat.Key), got $($actualSubstat.key)"
-            }
-            if ([Math]::Abs([double]$actualSubstat.value - [double]$expectedSubstat.Value) -gt 0.05) {
-                throw "$($fixture.Name) substat[$index] value expected $($expectedSubstat.Value), got $($actualSubstat.value)"
-            }
-        }
+        Assert-Substats $fixture.Name "substat" @($result.artifact.substats) $fixture.ExpectedSubstats
     }
     if ($fixture.ContainsKey("Unactivated") -and $result.artifact.unactivatedSubstats.Count -ne $fixture.Unactivated) {
         throw "$($fixture.Name) unactivated expected $($fixture.Unactivated), got $($result.artifact.unactivatedSubstats.Count)"
+    }
+    if ($fixture.ContainsKey("ExpectedUnactivatedSubstats")) {
+        Assert-Substats $fixture.Name "unactivated" @($result.artifact.unactivatedSubstats) $fixture.ExpectedUnactivatedSubstats
     }
 
     [PSCustomObject]@{

@@ -6,12 +6,17 @@ import { AssistantBubbleApp } from "./AssistantBubbleApp";
 import { App } from "./App";
 import { FixturePlaygroundApp } from "./FixturePlaygroundApp";
 import { RoiOverlayApp } from "./RoiOverlayApp";
+import { resetRuntimeStateOnce } from "./assistantRuntimeState";
 import { resolveWindowMode } from "./windowMode";
 import "./styles.css";
 
 const windowMode = resolveWindowMode(window.location.search, isTauri() ? getCurrentWindow().label : null);
 document.documentElement.dataset.window = windowMode;
 document.body.dataset.window = windowMode;
+
+if (windowMode === "assistant-bubble") {
+  resetRuntimeStateOnce();
+}
 
 const Root =
   windowMode === "roi-overlay"

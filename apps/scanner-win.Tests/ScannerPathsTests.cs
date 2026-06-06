@@ -47,12 +47,35 @@ public sealed class ScannerPathsTests
     {
         ScannerLogPaths first = ScannerPaths.CreateScannerLogPaths("region");
         ScannerLogPaths second = ScannerPaths.CreateScannerLogPaths("region");
+        string expectedLogDirectory = Path.Combine(ScannerPaths.FindRepoRoot(), "logs", "scanner");
 
         first.ScanId.Should().NotBeNullOrWhiteSpace();
         second.ScanId.Should().NotBe(first.ScanId);
-        first.LastSourcePath.Should().EndWith(Path.Combine("logs", "scanner", "region-source-last.png"));
-        first.LastRegionPath.Should().EndWith(Path.Combine("logs", "scanner", "region-last.png"));
-        first.SnapshotSourcePath.Should().Contain(Path.Combine("logs", "scanner", "captures"));
+        first.LastSourcePath.Should().Be(Path.Combine(expectedLogDirectory, "region-source-last.png"));
+        first.LastRegionPath.Should().Be(Path.Combine(expectedLogDirectory, "region-last.png"));
+        first.SnapshotSourcePath.Should().StartWith(Path.Combine(expectedLogDirectory, "captures"));
         first.SnapshotRegionPath.Should().Contain(first.ScanId);
+    }
+
+    [TestMethod]
+    public void CreateScannerLogPaths_UsesRepoRootWhenCurrentDirectoryIsTauriProject()
+    {
+        string originalDirectory = Environment.CurrentDirectory;
+        string repoRoot = ScannerPaths.FindRepoRoot();
+        string tauriDirectory = Path.Combine(repoRoot, "apps", "desktop", "src-tauri");
+
+        try
+        {
+            Environment.CurrentDirectory = tauriDirectory;
+
+            ScannerLogPaths paths = ScannerPaths.CreateScannerLogPaths("region");
+
+            paths.LastRegionPath.Should().Be(Path.Combine(repoRoot, "logs", "scanner", "region-last.png"));
+            paths.SnapshotRegionPath.Should().StartWith(Path.Combine(repoRoot, "logs", "scanner", "captures"));
+        }
+        finally
+        {
+            Environment.CurrentDirectory = originalDirectory;
+        }
     }
 }

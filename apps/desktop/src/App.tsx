@@ -14,21 +14,21 @@ import {
 } from "@ri-genshin/artifact-schema";
 import { BatchEvaluationResult, DEFAULT_PROFILES, evaluateArtifactExact, evaluateGoodArtifactBatch, ProbabilityResult } from "@ri-genshin/probability-core";
 import { enableMainInput, lockRoiEditor, openRoiEditor } from "./nativeWindows";
-import { loadLatestScannerResult, loadScanRegion, saveLatestScannerResult } from "./roi";
+import { loadLatestScannerResult, loadLatestScannerResultRevision, loadScanRegion, saveLatestScannerResult, subscribeLatestScannerResult } from "./roi";
 import { IDLE_SCAN_RESULT, SAMPLE_SCAN_RESULT } from "./sample";
 import { classifyRegionArtifact, parseScreenshotFixture, scanRegionArtifact, scannerStatus, ScannerStatus } from "./scanner";
 import {
   applyScannerCorrection,
   ARTIFACT_LEVEL_OPTIONS,
   ARTIFACT_SLOT_OPTIONS,
-  ArtifactMainStatCorrection,
-  ArtifactSlotCorrection,
+  ArtifactMainStatCorrectionSelection,
+  ArtifactSlotCorrectionSelection,
   getArtifactMainStatOptions,
   getScannerCorrectionState
 } from "./scannerCorrection";
 import { loadEvaluationProfile, saveEvaluationProfile } from "./evaluationProfile";
 import { InfoTooltip } from "./InfoTooltip";
-import { useSharedWatchState } from "./assistantRuntimeState";
+import { loadScanningState, useSharedScanningState, useSharedWatchState } from "./assistantRuntimeState";
 
 const confidenceKeys = ["setKey", "slotKey", "mainStatKey", "level", "substats", "lock", "equipped"] as const;
 const requiredConfidenceKeys = ["slotKey", "mainStatKey", "level", "substats"] as const;
@@ -69,16 +69,17 @@ export function App() {
   const [artifactJson, setArtifactJson] = useState(formatArtifactJson(IDLE_SCAN_RESULT));
   const [profileId, setProfileId] = useState(() => loadEvaluationProfile().id);
   const [screenshotFixture, setScreenshotFixture] = useState<ScreenshotFixtureName>(screenshotFixtures[0].value);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useSharedScanningState();
   const [watching, setWatching] = useSharedWatchState();
   const [debugToolsOpen, setDebugToolsOpen] = useState(false);
   const [manualLevel, setManualLevel] = useState(0);
-  const [manualSlotKey, setManualSlotKey] = useState<ArtifactSlotCorrection>("flower");
-  const [manualMainStatKey, setManualMainStatKey] = useState<ArtifactMainStatCorrection>("hp");
+  const [manualSlotKey, setManualSlotKey] = useState<ArtifactSlotCorrectionSelection>("");
+  const [manualMainStatKey, setManualMainStatKey] = useState<ArtifactMainStatCorrectionSelection>("");
   const [message, setMessage] = useState("No analysis has run yet. Open Genshin, set the ROI, then click Analyze.");
   const busyRef = useRef(false);
   const watchPollingRef = useRef(false);
   const lastScannedHashRef = useRef<string | null>(null);
+  const startupResultRevisionRef = useRef(loadLatestScannerResultRevision());
 
   const profile = DEFAULT_PROFILES.find((item) => item.id === profileId) ?? DEFAULT_PROFILES[0];
 
@@ -90,6 +91,20 @@ export function App() {
 
   useEffect(() => {
     void refreshStatus();
+  }, []);
+
+  useEffect(() => {
+    return subscribeLatestScannerResult((revision) => {
+      if (!revision || revision === startupResultRevisionRef.current) {
+        return;
+      }
+
+      const latest = loadLatestScannerResult();
+      if (latest) {
+        setArtifactJson(formatArtifactJson(latest));
+        setMessage(formatScannerMessage(latest, "Scan updated."));
+      }
+    });
   }, []);
 
   useEffect(() => {
@@ -149,7 +164,8 @@ export function App() {
   }
 
   async function handleScan(silent = false) {
-    if (busyRef.current) {
+    // Block if this window or the bubble window is already scanning.
+    if (busyRef.current || loadScanningState()) {
       return;
     }
     busyRef.current = true;
@@ -219,15 +235,20 @@ export function App() {
       slotKey: manualSlotKey,
       mainStatKey: manualMainStatKey
     });
+    if (corrected === scannerResult) {
+      setMessage("Choose valid OCR correction values first.");
+      return;
+    }
+
     setArtifactJson(formatArtifactJson(corrected));
     saveLatestScannerResult(corrected);
     setMessage("Manual OCR correction applied.");
   }
 
-  function updateManualSlotKey(slotKey: ArtifactSlotCorrection) {
+  function updateManualSlotKey(slotKey: ArtifactSlotCorrectionSelection) {
     const options = getArtifactMainStatOptions(slotKey);
     setManualSlotKey(slotKey);
-    setManualMainStatKey((current) => options.includes(current) ? current : (options[0] ?? current));
+    setManualMainStatKey((current) => current && options.includes(current) ? current : "");
   }
 
   async function handleEditRoi() {
@@ -453,7 +474,8 @@ export function App() {
                   {correction.needsSlotKey ? (
                     <label>
                       Slot
-                      <select value={manualSlotKey} onChange={(event) => updateManualSlotKey(event.target.value as ArtifactSlotCorrection)}>
+                      <select value={manualSlotKey} onChange={(event) => updateManualSlotKey(event.target.value as ArtifactSlotCorrectionSelection)}>
+                        <option value="">Select slot</option>
                         {ARTIFACT_SLOT_OPTIONS.map((slot) => (
                           <option key={slot} value={slot}>
                             {friendlySlot(slot)}
@@ -465,7 +487,8 @@ export function App() {
                   {correction.needsMainStatKey ? (
                     <label>
                       Main
-                      <select value={manualMainStatKey} onChange={(event) => setManualMainStatKey(event.target.value as ArtifactMainStatCorrection)}>
+                      <select value={manualMainStatKey} onChange={(event) => setManualMainStatKey(event.target.value as ArtifactMainStatCorrectionSelection)} disabled={manualMainStatOptions.length === 0}>
+                        <option value="">Select main stat</option>
                         {manualMainStatOptions.map((stat) => (
                           <option key={stat} value={stat}>
                             {friendlyStat(stat)}
@@ -486,7 +509,7 @@ export function App() {
                       </select>
                     </label>
                   ) : null}
-                  <button className="primary" onClick={applyManualCorrection}>
+                  <button className="primary" onClick={applyManualCorrection} disabled={!canApplyCorrection(correction, manualSlotKey, manualMainStatKey)}>
                     Apply
                   </button>
                 </div>
@@ -634,6 +657,23 @@ function correctionTitle(missingFields: string[]): string {
     return "Review Main Stat";
   }
   return "Review OCR";
+}
+
+function canApplyCorrection(
+  correction: ReturnType<typeof getScannerCorrectionState>,
+  slotKey: ArtifactSlotCorrectionSelection,
+  mainStatKey: ArtifactMainStatCorrectionSelection
+): boolean {
+  if (!correction.available) {
+    return false;
+  }
+  if (correction.needsSlotKey && !slotKey) {
+    return false;
+  }
+  if (correction.needsMainStatKey && !mainStatKey) {
+    return false;
+  }
+  return true;
 }
 
 function evaluateJsonInput(json: string, profile: (typeof DEFAULT_PROFILES)[number]): InputEvaluation {

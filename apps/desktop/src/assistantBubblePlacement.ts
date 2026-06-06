@@ -22,23 +22,14 @@ const MARGIN = 16;
 
 export function placeAssistantBubble(region: ScanRegion, viewport: BubbleViewport, dimensions: BubbleDimensions): BubblePlacement {
   const { width, height } = dimensions;
-  const roiLeft = region.x * viewport.width;
-  const roiRight = (region.x + region.width) * viewport.width;
-  const preferredLeft = roiLeft - width - MARGIN;
-  const rightCandidate = roiRight + MARGIN;
-  const hasLeftSpace = preferredLeft >= MARGIN;
-  const hasRightSpace = rightCandidate + width <= viewport.width - MARGIN;
-  const side = hasLeftSpace || !hasRightSpace ? "left" : "right";
-  const left = side === "left" ? preferredLeft : rightCandidate;
-  const top = region.y * viewport.height + MARGIN;
+  // Anchor to the left edge of the client area so the bubble does not float
+  // in front of the artifact card or drift into unpredictable positions.
+  const left = MARGIN;
+  // Vertically centre on the ROI midpoint and clamp to stay within the viewport.
+  const roiCenterY = (region.y + region.height / 2) * viewport.height;
+  const top = clamp(Math.round(roiCenterY - height / 2), MARGIN, viewport.height - height - MARGIN);
 
-  return {
-    left: clamp(left, MARGIN, viewport.width - width - MARGIN),
-    top: clamp(top, MARGIN, viewport.height - height - MARGIN),
-    width,
-    height,
-    side
-  };
+  return { left, top, width, height, side: "left" };
 }
 
 export function overlapsRegion(placement: BubblePlacement, region: ScanRegion, viewport: BubbleViewport): boolean {

@@ -72,8 +72,9 @@ internal static class ScannerCommands
         }
 
         using Bitmap windowBitmap = ScreenCapture.CaptureClient(window);
-        Directory.CreateDirectory(Path.Combine("logs", "scanner"));
-        string outputPath = Path.Combine("logs", "scanner", "visible-artifact-last.png");
+        string logDirectory = ScannerPaths.GetScannerLogDirectory();
+        Directory.CreateDirectory(logDirectory);
+        string outputPath = Path.Combine(logDirectory, "visible-artifact-last.png");
         windowBitmap.Save(outputPath, ImageFormat.Png);
 
         using OcrTextReader reader = new();
@@ -90,8 +91,9 @@ internal static class ScannerCommands
         }
 
         using Bitmap windowBitmap = ScreenCapture.CaptureClient(window);
-        Directory.CreateDirectory(Path.Combine("logs", "scanner"));
-        string outputPath = Path.Combine("logs", "scanner", "visible-screen-classification-last.png");
+        string logDirectory = ScannerPaths.GetScannerLogDirectory();
+        Directory.CreateDirectory(logDirectory);
+        string outputPath = Path.Combine(logDirectory, "visible-screen-classification-last.png");
         windowBitmap.Save(outputPath, ImageFormat.Png);
 
         return ScreenshotArtifactParser.ClassifyBitmap(windowBitmap, "screen", "screen-classification", Path.GetFullPath(outputPath));

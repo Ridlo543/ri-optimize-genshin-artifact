@@ -39,7 +39,7 @@ test("overlay and assistant routes keep every root layer transparent", async ({ 
 
   await launcher.click();
   await expect(page.locator(".assistant-bubble")).toBeVisible();
-  await expect(page.locator(".assistant-bubble")).toHaveCSS("border-top-width", "0px");
+  await expect(page.locator(".assistant-bubble")).toHaveCSS("border-left-width", "3px");
   await expect(page.getByRole("button", { name: "Minimize to bubble" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Minimize to bubble" }).locator(".assistant-collapse-icon")).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("assistant-expanded.png"), omitBackground: true });
@@ -47,6 +47,48 @@ test("overlay and assistant routes keep every root layer transparent", async ({ 
   await page.getByRole("button", { name: "Minimize to bubble" }).click();
   await expect(launcher).toBeVisible();
   await expect(page.locator(".assistant-bubble")).toHaveCount(0);
+});
+
+test("assistant bubble ignores stale watch, scanning, and previous OCR result on startup", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => {
+    window.localStorage.setItem("ri-genshin.assistant.watch.enabled.v1", "true");
+    window.localStorage.setItem("ri-genshin.assistant.scanning.v1", "true");
+    window.localStorage.setItem(
+      "ri-genshin.scanner.latestResult",
+      JSON.stringify({
+        source: "fixture",
+        mode: "region-classification",
+        confidence: {},
+        artifact: null,
+        screenState: {
+          code: "unknown-game-screen",
+          readyForArtifactOcr: false,
+          confidence: 0.4,
+          message: "stale result"
+        },
+        capture: {
+          resolution: "1920x1200",
+          capturedAt: "2026-06-06T00:00:00.000Z",
+          regionHash: "stale-hash"
+        }
+      })
+    );
+    window.localStorage.setItem("ri-genshin.scanner.latestResultRevision", "stale-hash|2026-06-06T00:00:00.000Z|region-classification");
+  });
+
+  await page.goto("/?window=assistant-bubble");
+
+  const launcher = page.locator(".assistant-launcher");
+  await expect(launcher).toHaveAttribute("aria-label", /Set ROI/);
+  await expect(launcher).toHaveClass(/assistant-launcher--setup/);
+  await expect.poll(() => page.evaluate(() => window.localStorage.getItem("ri-genshin.assistant.watch.enabled.v1"))).toBe("false");
+  await expect.poll(() => page.evaluate(() => window.localStorage.getItem("ri-genshin.assistant.scanning.v1"))).toBe("false");
+
+  await launcher.click();
+  await expect(page.locator(".assistant-bubble")).toBeVisible();
+  await expect(page.getByTitle("Watch")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Analyze" })).toBeEnabled();
 });
 
 test("assistant collapsed launcher fits a high-DPI shrunken viewport", async ({ page }, testInfo) => {

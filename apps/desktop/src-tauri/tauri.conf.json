@@ -81,6 +81,9 @@
     "active": true,
     "targets": "all",
     "category": "Utility",
+    "icon": [
+      "icons/icon.ico"
+    ],
     "externalBin": [
       "binaries/GenshinArtifactScanner.Win"
     ],

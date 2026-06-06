@@ -117,6 +117,9 @@
   - `data/log-manual/error_artifact_character_detail_3.png`
   - `data/log-manual/error_artifact_character_detail_4.png`
   - `data/log-manual/error_artifact_bag_detail_2.png`
+  - `data/log-manual/GenshinImpact_WGHmIpkN58.jpg`
+  - `data/log-manual/GenshinImpact_zuCNecgQiu.jpg`
+  - `data/log-manual/iTPXIcUjaV.png`
 - `data/fixtures/screenshots/bag-grid-live-1280x800.png` is a regression fixture for grid-only Artifact Bag at 1280x800; it must classify as non-ready and must not run OCR.
 - `scan-visible-artifact` now captures the live Genshin client and runs the same screenshot parser only after the screen-state gate passes. If the screen is not ready, the scanner returns a structured JSON guide message and low confidence values.
 - The desktop UI uses `parse-screenshot-fixture` for native sample testing because browser file inputs do not reliably expose filesystem paths to the sidecar.
@@ -157,6 +160,8 @@
 - The publish script names the sidecar with Rust's host tuple, for example `GenshinArtifactScanner.Win-x86_64-pc-windows-msvc.exe`.
 - Window bounds coming from scanner status are physical pixels. Rust owns native `set_position`, `set_size`, click-through, focusability, and no-activate orchestration.
 - `pnpm tauri:smoke` launches the native app and asserts that only the bubble is visible at startup, the main/ROI windows are hidden, the bubble expands, and bubble/passive-main clicks preserve the prior foreground PID.
+- In debug Tauri runs, Rust invokes the scanner through `dotnet run --project apps/scanner-win/GenshinArtifactScanner.Win.csproj` instead of a prebuilt scanner exe. This keeps `pnpm tauri:dev` aligned with current C# OCR code.
+- Scanner log paths are resolved through `ScannerPaths.FindRepoRoot()`, so live Tauri scans and CLI scans both update repo-root `logs/scanner/region-last.png`.
 
 ## Safety Boundary
 

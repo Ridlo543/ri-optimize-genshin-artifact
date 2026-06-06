@@ -21,13 +21,15 @@ import {
 import { classifyRegionArtifact, scanRegionArtifact, scannerStatus, ScannerStatus } from "./scanner";
 import {
   loadLatestScannerResult,
+  loadLatestScannerResultRevision,
   loadScanRegion,
-  saveLatestScannerResult
+  saveLatestScannerResult,
+  subscribeLatestScannerResult
 } from "./roi";
 import {
   applyScannerCorrection,
-  ArtifactMainStatCorrection,
-  ArtifactSlotCorrection,
+  ArtifactMainStatCorrectionSelection,
+  ArtifactSlotCorrectionSelection,
   getArtifactMainStatOptions,
   getScannerCorrectionState
 } from "./scannerCorrection";
@@ -38,20 +40,21 @@ import {
   saveAssistantPlacement
 } from "./assistantPlacement";
 import { loadEvaluationProfile } from "./evaluationProfile";
-import { useSharedWatchState } from "./assistantRuntimeState";
+import { loadScanningState, useSharedScanningState, useSharedWatchState } from "./assistantRuntimeState";
 
 export function AssistantBubbleApp() {
-  const [result, setResult] = useState<ScannerArtifactResult | null>(loadLatestScannerResult);
+  const startupResultRevisionRef = useRef(loadLatestScannerResultRevision());
+  const [result, setResult] = useState<ScannerArtifactResult | null>(null);
   const [region, setRegion] = useState(loadScanRegion);
   const [status, setStatus] = useState<ScannerStatus | null>(null);
   const [watching, setWatching] = useSharedWatchState();
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useSharedScanningState();
   const [collapsed, setCollapsed] = useState(true);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [error, setError] = useState("");
   const [manualLevel, setManualLevel] = useState(0);
-  const [manualSlotKey, setManualSlotKey] = useState<ArtifactSlotCorrection>("flower");
-  const [manualMainStatKey, setManualMainStatKey] = useState<ArtifactMainStatCorrection>("hp");
+  const [manualSlotKey, setManualSlotKey] = useState<ArtifactSlotCorrectionSelection>("");
+  const [manualMainStatKey, setManualMainStatKey] = useState<ArtifactMainStatCorrectionSelection>("");
   const [placement, setPlacement] = useState(loadAssistantPlacement);
   const [profile, setProfile] = useState(loadEvaluationProfile);
   const busyRef = useRef(false);
@@ -72,13 +75,22 @@ export function AssistantBubbleApp() {
     const id = window.setInterval(() => {
       const storedRegion = loadScanRegion();
       setRegion((current) => (sameRegion(current, storedRegion) ? current : storedRegion));
-      const stored = loadLatestScannerResult();
-      setResult((current) => (sameResult(current, stored) ? current : stored));
       const storedProfile = loadEvaluationProfile();
       setProfile((current) => (current.id === storedProfile.id ? current : storedProfile));
     }, 500);
 
     return () => window.clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    return subscribeLatestScannerResult((revision) => {
+      if (!revision || revision === startupResultRevisionRef.current) {
+        return;
+      }
+
+      const stored = loadLatestScannerResult();
+      setResult((current) => (sameResult(current, stored) ? current : stored));
+    });
   }, []);
 
   useEffect(() => {
@@ -139,6 +151,11 @@ export function AssistantBubbleApp() {
     if (draggingRef.current) {
       return;
     }
+    // Skip when neither the game position nor a manual placement is known.
+    // Without this guard the window would jump to the top-left fallback (32 px, 72 px).
+    if (!status?.available && !placement) {
+      return;
+    }
 
     void syncAssistantWindowBounds(assistantWindowRect(status, region, collapsed, detailsOpen, window.devicePixelRatio, placement)).catch((caught) => {
       setError(caught instanceof Error ? caught.message : "Unable to resize assistant.");
@@ -166,7 +183,8 @@ export function AssistantBubbleApp() {
   }, [watching, region]);
 
   async function scanNow(silent = false) {
-    if (busyRef.current) {
+    // Block if this window or any other window (main panel) is already scanning.
+    if (busyRef.current || loadScanningState()) {
       return;
     }
 
@@ -293,6 +311,25 @@ export function AssistantBubbleApp() {
     }
   }
 
+  async function toggleCollapsed() {
+    if (!collapsed) {
+      // Collapsing: shrink content immediately; the useEffect will resize the native window.
+      setCollapsed(true);
+      return;
+    }
+    // Expanding: pre-resize the native window before React renders expanded content so the
+    // content is never clipped inside a still-collapsed window.
+    // Only pre-resize when we have a reference point (game detected or manual placement).
+    if (isTauri() && (status?.available || placement) && !draggingRef.current) {
+      try {
+        await syncAssistantWindowBounds(assistantWindowRect(status, region, false, detailsOpen, window.devicePixelRatio, placement));
+      } catch {
+        // Ignore resize errors; still expand the content.
+      }
+    }
+    setCollapsed(false);
+  }
+
   async function handleQuit() {
     try {
       await quitApp();
@@ -316,15 +353,20 @@ export function AssistantBubbleApp() {
       slotKey: manualSlotKey,
       mainStatKey: manualMainStatKey
     });
+    if (corrected === result) {
+      setError("Choose valid OCR correction values first.");
+      return;
+    }
+
     setResult(corrected);
     saveLatestScannerResult(corrected);
     setError("");
   }
 
-  function updateManualSlotKey(slotKey: ArtifactSlotCorrection) {
+  function updateManualSlotKey(slotKey: ArtifactSlotCorrectionSelection) {
     const options = getArtifactMainStatOptions(slotKey);
     setManualSlotKey(slotKey);
-    setManualMainStatKey((current) => options.includes(current) ? current : (options[0] ?? current));
+    setManualMainStatKey((current) => current && options.includes(current) ? current : "");
   }
 
   return (
@@ -355,7 +397,7 @@ export function AssistantBubbleApp() {
             }
           : undefined
       }
-      onToggleCollapsed={() => setCollapsed((value) => !value)}
+      onToggleCollapsed={() => void toggleCollapsed()}
       onScan={() => void scanNow()}
       onToggleWatch={() => setWatching((value) => !value)}
       onEditRoi={() => void editRoi()}

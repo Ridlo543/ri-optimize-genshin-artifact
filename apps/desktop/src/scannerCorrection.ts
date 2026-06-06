@@ -25,6 +25,8 @@ export const ARTIFACT_MAIN_STAT_OPTIONS = [
 
 export type ArtifactSlotCorrection = (typeof ARTIFACT_SLOT_OPTIONS)[number];
 export type ArtifactMainStatCorrection = (typeof ARTIFACT_MAIN_STAT_OPTIONS)[number];
+export type ArtifactSlotCorrectionSelection = ArtifactSlotCorrection | "";
+export type ArtifactMainStatCorrectionSelection = ArtifactMainStatCorrection | "";
 
 const MAIN_STATS_BY_SLOT: Record<ArtifactSlotCorrection, readonly ArtifactMainStatCorrection[]> = {
   flower: ["hp"],
@@ -63,8 +65,8 @@ export interface ScannerCorrectionState {
 
 export interface ScannerCorrections {
   level?: number;
-  slotKey?: ArtifactSlotCorrection;
-  mainStatKey?: ArtifactMainStatCorrection;
+  slotKey?: ArtifactSlotCorrectionSelection;
+  mainStatKey?: ArtifactMainStatCorrectionSelection;
 }
 
 export function getLevelCorrectionState(result: ScannerArtifactResult | null): LevelCorrectionState {
@@ -168,7 +170,11 @@ export function applyScannerCorrection(result: ScannerArtifactResult, correction
   };
 }
 
-export function getArtifactMainStatOptions(slotKey: ArtifactSlotCorrection): readonly ArtifactMainStatCorrection[] {
+export function getArtifactMainStatOptions(slotKey: ArtifactSlotCorrectionSelection): readonly ArtifactMainStatCorrection[] {
+  if (!slotKey) {
+    return [];
+  }
+
   return MAIN_STATS_BY_SLOT[slotKey];
 }
 

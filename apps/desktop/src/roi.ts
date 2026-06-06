@@ -2,6 +2,8 @@ import { isNormalizedScanRegion, ScanRegion, ScannerArtifactResult } from "@ri-g
 
 const ROI_KEY = "ri-genshin.roi.region";
 const LATEST_RESULT_KEY = "ri-genshin.scanner.latestResult";
+const LATEST_RESULT_REVISION_KEY = "ri-genshin.scanner.latestResultRevision";
+const LATEST_RESULT_EVENT = "ri-genshin-scanner-result";
 
 export const DEFAULT_REGION: ScanRegion = {
   x: 0.68,
@@ -40,6 +42,39 @@ export function loadLatestScannerResult(): ScannerArtifactResult | null {
   }
 }
 
+export function loadLatestScannerResultRevision(): string | null {
+  return window.localStorage.getItem(LATEST_RESULT_REVISION_KEY);
+}
+
 export function saveLatestScannerResult(result: ScannerArtifactResult): void {
+  const revision = createResultRevision(result);
   window.localStorage.setItem(LATEST_RESULT_KEY, JSON.stringify(result));
+  window.localStorage.setItem(LATEST_RESULT_REVISION_KEY, revision);
+  window.dispatchEvent(new CustomEvent(LATEST_RESULT_EVENT, { detail: revision }));
+}
+
+export function subscribeLatestScannerResult(listener: (revision: string | null) => void): () => void {
+  const sync = () => listener(loadLatestScannerResultRevision());
+  const handleCustom = (event: Event) => {
+    const detail = (event as CustomEvent<string>).detail;
+    listener(typeof detail === "string" ? detail : loadLatestScannerResultRevision());
+  };
+
+  window.addEventListener("storage", sync);
+  window.addEventListener(LATEST_RESULT_EVENT, handleCustom);
+  return () => {
+    window.removeEventListener("storage", sync);
+    window.removeEventListener(LATEST_RESULT_EVENT, handleCustom);
+  };
+}
+
+function createResultRevision(result: ScannerArtifactResult): string {
+  const capture = result.capture ?? {};
+  return [
+    capture.scanId,
+    capture.regionHash,
+    capture.screenshotHash,
+    capture.capturedAt,
+    result.mode
+  ].filter(Boolean).join("|") || `${Date.now()}`;
 }

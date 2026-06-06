@@ -30,14 +30,18 @@ describe("fixture playground catalog", () => {
     const placement = placeAssistantBubble(CHARACTER_PANEL_REGION, viewport, { width: 340, height: 260 });
 
     expect(placement.side).toBe("left");
+    expect(placement.left).toBe(16);
     expect(overlapsRegion(placement, CHARACTER_PANEL_REGION, viewport)).toBe(false);
   });
 
   it("places expanded bubble away from bag card ROI", () => {
     const viewport = { width: 1920, height: 1200 };
     const placement = placeAssistantBubble(BAG_CARD_REGION, viewport, { width: 340, height: 260 });
+    const roiCenterY = (BAG_CARD_REGION.y + BAG_CARD_REGION.height / 2) * viewport.height;
 
     expect(placement.side).toBe("left");
+    expect(placement.left).toBe(16);
+    expect(placement.top + placement.height / 2).toBeCloseTo(roiCenterY, 0);
     expect(overlapsRegion(placement, BAG_CARD_REGION, viewport)).toBe(false);
   });
 });

@@ -10,7 +10,7 @@ internal static class ScannerPaths
         }
 
         string scanId = CreateScanId();
-        string logDirectory = Path.Combine("logs", "scanner");
+        string logDirectory = GetScannerLogDirectory();
         string snapshotDirectory = Path.Combine(logDirectory, "captures");
         Directory.CreateDirectory(logDirectory);
         Directory.CreateDirectory(snapshotDirectory);
@@ -21,6 +21,11 @@ internal static class ScannerPaths
             LastRegionPath: Path.Combine(logDirectory, $"{prefix}-last.png"),
             SnapshotSourcePath: Path.Combine(snapshotDirectory, $"{prefix}-source-{scanId}.png"),
             SnapshotRegionPath: Path.Combine(snapshotDirectory, $"{prefix}-{scanId}.png"));
+    }
+
+    public static string GetScannerLogDirectory()
+    {
+        return Path.Combine(FindRepoRoot(), "logs", "scanner");
     }
 
     public static string FindRepoRoot()

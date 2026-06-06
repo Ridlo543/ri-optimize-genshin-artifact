@@ -129,4 +129,26 @@ describe("scanner level correction", () => {
     expect(corrected.artifact).toBeNull();
     expect(corrected.missingFields).toEqual(["mainStatKey"]);
   });
+
+  it("does not apply a missing slot and main-stat correction from empty placeholder selections", () => {
+    const result: ScannerArtifactResult = {
+      ...missingLevelResult,
+      artifactDraft: {
+        setKey: "ObsidianCodex",
+        rarity: 5,
+        level: 20,
+        substats: [{ key: "critRate_", value: 6.6 }],
+        unactivatedSubstats: [],
+        lock: true,
+        location: "Fischl"
+      },
+      missingFields: ["slotKey", "mainStatKey"],
+      error: "Region OCR missing required fields: slotKey, mainStatKey."
+    };
+
+    const corrected = applyScannerCorrection(result, { slotKey: "", mainStatKey: "" });
+
+    expect(corrected.artifact).toBeNull();
+    expect(corrected.missingFields).toEqual(["slotKey", "mainStatKey"]);
+  });
 });

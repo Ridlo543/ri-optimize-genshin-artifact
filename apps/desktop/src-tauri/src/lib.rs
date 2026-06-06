@@ -1,9 +1,13 @@
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Command, Output, Stdio};
+use std::time::{Duration, Instant};
 use tauri::{Emitter, Manager, PhysicalPosition, PhysicalSize, WindowEvent};
+use tauri_plugin_shell::process::CommandEvent;
 use tauri_plugin_shell::ShellExt;
+
+const SCANNER_COMMAND_TIMEOUT: Duration = Duration::from_secs(45);
+const SCANNER_POLL_INTERVAL: Duration = Duration::from_millis(50);
 
 #[derive(Clone, Copy, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -281,6 +285,17 @@ async fn run_scanner(app: &tauri::AppHandle, args: &[&str]) -> Result<String, St
     }
 
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let project = manifest_dir
+        .join("..")
+        .join("..")
+        .join("scanner-win")
+        .join("GenshinArtifactScanner.Win.csproj");
+
+    #[cfg(debug_assertions)]
+    if project.exists() {
+        return run_dotnet_project(project, args);
+    }
+
     let debug_exe = manifest_dir
         .join("..")
         .join("..")
@@ -298,22 +313,23 @@ async fn run_scanner(app: &tauri::AppHandle, args: &[&str]) -> Result<String, St
         return result;
     }
 
-    let project = manifest_dir
-        .join("..")
-        .join("..")
-        .join("scanner-win")
-        .join("GenshinArtifactScanner.Win.csproj");
+    if project.exists() {
+        return run_dotnet_project(project, args);
+    }
 
-    let output = Command::new("dotnet")
+    Err("Scanner sidecar was not found.".to_string())
+}
+
+fn run_dotnet_project(project: PathBuf, args: &[&str]) -> Result<String, String> {
+    let mut command = Command::new("dotnet");
+    command
         .arg("run")
         .arg("--project")
         .arg(project)
         .arg("--")
-        .args(args)
-        .output()
-        .map_err(|error| format!("Unable to start scanner sidecar: {error}"))?;
+        .args(args);
 
-    command_output(output)
+    command_output(run_command_with_timeout(command, "scanner sidecar")?)
 }
 
 async fn run_scanner_with_assistant_hidden(
@@ -368,24 +384,87 @@ async fn run_bundled_sidecar(
         command = command.arg(*arg);
     }
 
-    Some(
-        command
-            .output()
-            .await
-            .map_err(|error| format!("Unable to run bundled scanner sidecar: {error}"))
-            .and_then(|output| {
-                command_output_parts(output.status.success(), &output.stdout, &output.stderr)
-            }),
-    )
+    Some(run_plugin_shell_command_with_timeout(command).await)
+}
+
+async fn run_plugin_shell_command_with_timeout(
+    command: tauri_plugin_shell::process::Command,
+) -> Result<String, String> {
+    let (mut rx, child) = command
+        .spawn()
+        .map_err(|error| format!("Unable to run bundled scanner sidecar: {error}"))?;
+    let timeout = tokio::time::sleep(SCANNER_COMMAND_TIMEOUT);
+    tokio::pin!(timeout);
+    let mut stdout = Vec::new();
+    let mut stderr = Vec::new();
+
+    loop {
+        tokio::select! {
+            event = rx.recv() => {
+                match event {
+                    Some(CommandEvent::Stdout(line)) => {
+                        stdout.extend(line);
+                        stdout.push(b'\n');
+                    }
+                    Some(CommandEvent::Stderr(line)) => {
+                        stderr.extend(line);
+                        stderr.push(b'\n');
+                    }
+                    Some(CommandEvent::Error(error)) => return Err(format!("Scanner sidecar failed: {error}")),
+                    Some(CommandEvent::Terminated(payload)) => {
+                        return command_output_parts(payload.code == Some(0), &stdout, &stderr);
+                    }
+                    Some(_) => {}
+                    None => return Err("Scanner sidecar exited without a termination status.".to_string()),
+                }
+            }
+            _ = &mut timeout => {
+                let _ = child.kill();
+                return Err(format!(
+                    "Scanner sidecar timed out after {} seconds.",
+                    SCANNER_COMMAND_TIMEOUT.as_secs()
+                ));
+            }
+        }
+    }
 }
 
 fn run_executable(path: PathBuf, args: &[&str]) -> Result<String, String> {
-    let output = Command::new(path)
-        .args(args)
-        .output()
-        .map_err(|error| format!("Unable to start scanner sidecar: {error}"))?;
+    let mut command = Command::new(path);
+    command.args(args);
 
-    command_output(output)
+    command_output(run_command_with_timeout(command, "scanner sidecar")?)
+}
+
+fn run_command_with_timeout(mut command: Command, context: &str) -> Result<Output, String> {
+    command.stdout(Stdio::piped()).stderr(Stdio::piped());
+    let mut child = command
+        .spawn()
+        .map_err(|error| format!("Unable to start {context}: {error}"))?;
+    let started = Instant::now();
+
+    loop {
+        if child
+            .try_wait()
+            .map_err(|error| format!("Unable to poll {context}: {error}"))?
+            .is_some()
+        {
+            return child
+                .wait_with_output()
+                .map_err(|error| format!("Unable to read {context} output: {error}"));
+        }
+
+        if started.elapsed() >= SCANNER_COMMAND_TIMEOUT {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(format!(
+                "Scanner sidecar timed out after {} seconds.",
+                SCANNER_COMMAND_TIMEOUT.as_secs()
+            ));
+        }
+
+        std::thread::sleep(SCANNER_POLL_INTERVAL);
+    }
 }
 
 fn command_output(output: std::process::Output) -> Result<String, String> {
@@ -426,6 +505,17 @@ fn set_window_bounds(
     window
         .set_size(PhysicalSize::new(rect.width, rect.height))
         .map_err(|error| error.to_string())
+}
+
+fn reset_assistant_runtime_storage(window: &tauri::WebviewWindow) {
+    let _ = window.eval(
+        r#"
+        localStorage.setItem('ri-genshin.assistant.watch.enabled.v1', 'false');
+        localStorage.setItem('ri-genshin.assistant.scanning.v1', 'false');
+        window.dispatchEvent(new CustomEvent('ri-genshin-watch-state', { detail: false }));
+        window.dispatchEvent(new CustomEvent('ri-genshin-scanning-state', { detail: false }));
+        "#,
+    );
 }
 
 #[cfg(target_os = "windows")]
@@ -513,6 +603,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
             if let Some(main) = app.get_webview_window("main") {
+                reset_assistant_runtime_storage(&main);
                 main.hide()?;
             }
             if let Some(overlay) = app.get_webview_window("roi-overlay") {
@@ -523,6 +614,7 @@ pub fn run() {
                 overlay.hide()?;
             }
             if let Some(bubble) = app.get_webview_window("assistant-bubble") {
+                reset_assistant_runtime_storage(&bubble);
                 let _ = bubble.set_shadow(false);
                 // Mouse events still reach the WebView, but keyboard focus stays with
                 // the game so borderless/fullscreen clients are not minimized by clicks.

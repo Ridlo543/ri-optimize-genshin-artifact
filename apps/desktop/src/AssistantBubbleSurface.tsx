@@ -2,20 +2,26 @@ import { CSSProperties, KeyboardEvent, PointerEvent, useRef } from "react";
 import { Eye, Gem, GripVertical, List, Maximize2, Minus, Power, RotateCcw, ScanLine, SlidersHorizontal, Square } from "lucide-react";
 import { AssistantSummary } from "./assistantSummary";
 import { InfoTooltip } from "./InfoTooltip";
-import { ARTIFACT_LEVEL_OPTIONS, ARTIFACT_SLOT_OPTIONS, ArtifactMainStatCorrection, ArtifactSlotCorrection, getArtifactMainStatOptions } from "./scannerCorrection";
+import {
+  ARTIFACT_LEVEL_OPTIONS,
+  ARTIFACT_SLOT_OPTIONS,
+  ArtifactMainStatCorrectionSelection,
+  ArtifactSlotCorrectionSelection,
+  getArtifactMainStatOptions
+} from "./scannerCorrection";
 
 export interface AssistantLevelCorrection {
   available: boolean;
   level: number;
-  slotKey: ArtifactSlotCorrection;
-  mainStatKey: ArtifactMainStatCorrection;
+  slotKey: ArtifactSlotCorrectionSelection;
+  mainStatKey: ArtifactMainStatCorrectionSelection;
   reason: string;
   needsLevel?: boolean;
   needsSlotKey?: boolean;
   needsMainStatKey?: boolean;
   onLevelChange: (level: number) => void;
-  onSlotKeyChange: (slotKey: ArtifactSlotCorrection) => void;
-  onMainStatKeyChange: (mainStatKey: ArtifactMainStatCorrection) => void;
+  onSlotKeyChange: (slotKey: ArtifactSlotCorrectionSelection) => void;
+  onMainStatKeyChange: (mainStatKey: ArtifactMainStatCorrectionSelection) => void;
   onApply: () => void;
 }
 
@@ -111,7 +117,8 @@ export function AssistantBubbleSurface({
           {levelCorrection.needsSlotKey ? (
             <label>
               <span>Slot</span>
-              <select value={levelCorrection.slotKey} onChange={(event) => levelCorrection.onSlotKeyChange(event.target.value as ArtifactSlotCorrection)}>
+              <select value={levelCorrection.slotKey} onChange={(event) => levelCorrection.onSlotKeyChange(event.target.value as ArtifactSlotCorrectionSelection)}>
+                <option value="">Select slot</option>
                 {ARTIFACT_SLOT_OPTIONS.map((slot) => (
                   <option key={slot} value={slot}>
                     {slotLabel(slot)}
@@ -123,7 +130,12 @@ export function AssistantBubbleSurface({
           {levelCorrection.needsMainStatKey ? (
             <label>
               <span>Main</span>
-              <select value={levelCorrection.mainStatKey} onChange={(event) => levelCorrection.onMainStatKeyChange(event.target.value as ArtifactMainStatCorrection)}>
+              <select
+                value={levelCorrection.mainStatKey}
+                onChange={(event) => levelCorrection.onMainStatKeyChange(event.target.value as ArtifactMainStatCorrectionSelection)}
+                disabled={getArtifactMainStatOptions(levelCorrection.slotKey).length === 0}
+              >
+                <option value="">Select main stat</option>
                 {getArtifactMainStatOptions(levelCorrection.slotKey).map((stat) => (
                   <option key={stat} value={stat}>
                     {statLabel(stat)}
@@ -144,7 +156,7 @@ export function AssistantBubbleSurface({
               </select>
             </label>
           ) : null}
-          <button className="primary" {...buttonAction(levelCorrection.onApply)}>
+          <button className="primary" disabled={!canApplyCorrection(levelCorrection)} {...buttonAction(levelCorrection.onApply)}>
             Apply
           </button>
         </div>
@@ -199,6 +211,16 @@ export function AssistantBubbleSurface({
       </div>
     </main>
   );
+}
+
+function canApplyCorrection(correction: AssistantLevelCorrection): boolean {
+  if (correction.needsSlotKey && !correction.slotKey) {
+    return false;
+  }
+  if (correction.needsMainStatKey && !correction.mainStatKey) {
+    return false;
+  }
+  return true;
 }
 
 function slotLabel(value: string): string {

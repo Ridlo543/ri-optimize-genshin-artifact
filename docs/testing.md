@@ -22,7 +22,7 @@
 - ROI fixture tests cover bag-card and character-panel regions through `ArtifactRegionParserTests`.
 - Region parser regression tests cover Royal Flora 5-star rarity, level OCR normalization, and the `artifactDraft`/`missingFields` path when only level is missing.
 - Set resolver tests cover `Disenchantment in Deep Shadow`, artifact-item-name fallback, and unknown-set non-blocking warnings.
-- Manual-log regression tests cover nine real user screenshots in `data/log-manual`, including borderline red character panels, wrapped artifact names, long-title crops, unknown set names, bag detail +0/+20 cases, and partial green set-name OCR.
+- Manual-log regression tests cover twelve real user screenshots in `data/log-manual`, including borderline red character panels, wrapped artifact names, long-title crops, unknown set names, bag detail +0/+20 cases, partial green set-name OCR, and manual bag screenshots captured while the assistant UI was visible.
 - `parse-region-fixture <fixtureFileName> <regionJson>` verifies a normalized ROI against curated screenshot fixtures.
 - `parse-region-fixture` accepts safe fixture file names from `data/fixtures/screenshots`, `data/example/picture`, and `data/log-manual`.
 - `pnpm scanner:regions` parses the seven fixture playground ROI examples: character +20, character unactivated, bag +20, Royal Flora unactivated, Instructor 4-star, Traveling Doctor 3-star, and Adventurer 2-star.
@@ -34,7 +34,7 @@
 - `pnpm --filter @ri-genshin/artifact-schema test` covers GOOD normalization and scanner confidence trust policy.
 - `pnpm --filter @ri-genshin/desktop test` covers compact assistant summary formatting, trust blocking, manual level correction, fixture catalog ROI validation, and bubble placement.
 - `pnpm --filter @ri-genshin/desktop test` covers compact assistant summary formatting, trust blocking, manual OCR correction for level/slot/main stat, fixture catalog ROI validation, and bubble placement.
-- `pnpm --filter @ri-genshin/desktop test:e2e` covers root transparency, launcher shape, expanded bubble no-border CSS, fixture ROI resize/lock, real metric tooltips, and main-panel horizontal overflow.
+- `pnpm --filter @ri-genshin/desktop test:e2e` covers root transparency, launcher shape, expanded bubble styling, fixture ROI resize/lock, real metric tooltips, and main-panel horizontal overflow.
 - `pnpm --filter @ri-genshin/desktop test:e2e -- e2e/window-flow.spec.ts` also covers collapsed click-versus-drag behavior, expanded bubble minimize, accessible metric explanations, the collapsed logo mark, and Import loading of `artifact-samples.json`.
 - `pnpm tauri:smoke` covers native startup visibility, DPI-aware bubble sizing, topmost state, expansion, and foreground-focus preservation for bubble/passive-main clicks. If Genshin is running, it explicitly brings Genshin forward and verifies its PID remains foreground.
 - Native Tauri UI can run the same fixture OCR from the toolbar screenshot selector.
@@ -66,9 +66,11 @@
 - Confirm the expanded assistant has no visible transparent-window border like `data/log-manual/border_transparent.png`.
 - If the bubble only appears after minimizing Genshin, confirm Genshin is not using exclusive fullscreen. Use borderless/windowed for overlay visibility.
 - Confirm `logs/scanner/region-last.png` matches the artifact panel and `capture.scanId` points to a non-overwritten snapshot under `logs/scanner/captures/`.
+- In Tauri dev, `logs/scanner/region-last.png` is still rooted at the repo root. `apps/desktop/src-tauri/logs/scanner` should not be the active debug path.
 - If OCR misses only `level`, confirm the bubble/main panel shows `Review Level`, choose `+0..+20`, and verify the recommendation appears after applying correction.
 - If OCR misses `slotKey` or `mainStatKey`, confirm the bubble/main panel shows `Review Slot`, `Review Main Stat`, or `Review OCR`, then choose the visible value and verify the recommendation appears after applying correction.
 - Confirm manual main-stat correction only offers values valid for the selected slot. Flower must use flat HP and Plume must use flat ATK.
+- Confirm missing slot/main-stat correction starts with placeholder values, not `Flower / HP`, so users cannot accidentally apply an impossible stale correction.
 - Confirm metric info icons show a tooltip on mouse hover and keyboard focus.
 - Confirm `capture.occlusionAvoided=true` for native live scans from Tauri; this means assistant/main windows were hidden before screen capture.
 - Toggle `Watch`, change selected artifact in game, and confirm OCR only refreshes when `capture.regionHash` changes.
@@ -91,3 +93,11 @@
 - `pnpm test:ui`
 - `pnpm tauri:smoke`
 - `pnpm scanner:manual-logs`
+
+## Desktop Release Build
+
+- Run `pnpm --filter @ri-genshin/desktop tauri build` from the repo root.
+- The Tauri build uses `apps/desktop/src-tauri/tauri.conf.json` and runs `beforeBuildCommand="pnpm build:tauri"` automatically.
+- `pnpm build:tauri` builds the desktop frontend and runs `pnpm --dir ../.. scanner:publish:tauri`, which publishes the C# scanner sidecar into `apps/desktop/src-tauri/binaries`.
+- Windows MSI/NSIS bundling requires `apps/desktop/src-tauri/icons/icon.ico` to be listed in `bundle.icon`.
+- Release artifacts are written under `apps/desktop/src-tauri/target/release/`; bundled installers live under `apps/desktop/src-tauri/target/release/bundle/`.

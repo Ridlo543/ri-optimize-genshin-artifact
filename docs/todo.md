@@ -152,7 +152,10 @@
   - Short `Af`/`Hf`/`Df` OCR tokens can recover percentage main stats for Sands/Circlet, while Goblet remains strict to avoid elemental-stat ambiguity.
   - Flower and Plume main stats are safely inferred as flat HP and flat ATK when their labels are unreadable.
   - Manual correction only offers main stats valid for the selected slot and rejects impossible slot/main-stat combinations.
-  - `pnpm scanner:manual-logs` covers nine real screenshots, including `error_artifact_character_detail_2/3/4.png` and `error_artifact_bag_detail_2.png`.
+  - `pnpm scanner:manual-logs` covers twelve real screenshots, including `error_artifact_character_detail_2/3/4.png`, `error_artifact_bag_detail_2.png`, the manual bag screenshots `GenshinImpact_WGHmIpkN58.jpg` / `GenshinImpact_zuCNecgQiu.jpg`, and `iTPXIcUjaV.png`.
+  - Manual correction dropdowns no longer default to `Flower / HP`; missing slot/main-stat correction starts with explicit placeholder choices to avoid accidental wrong Apply actions.
+  - Scanner logs are rooted at repo `logs/scanner` even when invoked by Tauri from `apps/desktop/src-tauri`.
+  - Tauri debug builds run the scanner via `dotnet run --project apps/scanner-win` so `pnpm tauri:dev` does not use a stale Debug or bundled scanner executable.
 
 ## Next High Priority TODO
 
@@ -280,6 +283,9 @@
 - `data/log-manual/error_artifact_character_detail_3.png`: character Elemental Mastery sands regression; expected four active substats.
 - `data/log-manual/error_artifact_character_detail_4.png`: long artifact-name character regression; expected +0 with three active and one unactivated substat.
 - `data/log-manual/error_artifact_bag_detail_2.png`: bag Flower regression; expected flat HP main stat and non-blocking set metadata.
+- `data/log-manual/GenshinImpact_WGHmIpkN58.jpg`: manual bag screenshot; expected Obsidian Codex ATK% sands +20 with four exact substats.
+- `data/log-manual/GenshinImpact_zuCNecgQiu.jpg`: manual bag screenshot; expected Disenchantment ATK% sands +0 with three active and one unactivated DEF% substat.
+- `data/log-manual/iTPXIcUjaV.png`: manual bag screenshot with assistant visible; expected Celestial Gift Flower HP +20 with four exact substats.
 
 ## Automated Follow-Up Tests
 
