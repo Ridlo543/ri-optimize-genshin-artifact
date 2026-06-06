@@ -138,6 +138,7 @@
   - All primary metrics expose keyboard-accessible English explanations.
 - [x] Stabilize bubble drag, tooltip, and manual OCR regressions.
   - Bubble drag now suppresses React bounds sync during native drag and persists final placement after movement settles.
+  - Native bubble host is non-focusable/no-activate; the launcher fills the host window so DPI 150% clicks do not land on transparent dead space.
   - Expanded bubble no longer draws a visible outer transparent-window border; state is shown through content/dot styling.
   - Live Tauri region scans hide assistant/main windows during `CopyFromScreen` capture and mark `capture.occlusionAvoided`.
   - Watch state is shared between bubble, fixture playground, and main panel.

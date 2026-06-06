@@ -260,8 +260,9 @@ try {
     Save-WindowCapture $expandedBubble[0] (Join-Path $logsDir "assistant-expanded-native.png")
 
     # Click the far-right action-row button (Open Panel). Use proportional native
-    # coordinates so the smoke test survives 100-150% DPI scaling.
-    [NativeWindowAudit]::Click($expandedBubble[0].X + $expandedBubble[0].Width - 75, $expandedBubble[0].Y + [int]($expandedBubble[0].Height * 0.40))
+    # coordinates so the smoke test survives 100-150% DPI scaling and the compact
+    # bubble's metric content above the action row.
+    [NativeWindowAudit]::Click($expandedBubble[0].X + $expandedBubble[0].Width - 35, $expandedBubble[0].Y + [int]($expandedBubble[0].Height * 0.74))
     Start-Sleep -Milliseconds 1500
     $panelWindows = @([NativeWindowAudit]::GetWindows($app.Id))
     $visibleMain = @($panelWindows | Where-Object { $_.Title -eq "Genshin Artifact Assistant" -and $_.Visible })

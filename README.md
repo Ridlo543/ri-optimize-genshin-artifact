@@ -25,7 +25,7 @@ This is an active MVP implementation:
 - Native startup shows only a compact assistant bubble. The main panel and ROI editor remain hidden until requested.
 - The collapsed launcher and expanded assistant header are draggable. Dragged position is stored relative to the Genshin client and can be reset from Details.
 - Dragging suppresses React window-bound syncing until movement settles, avoiding jitter when moving the bubble/menu.
-- Bubble, ROI editor, and the passive main panel use Windows no-activate/focusable guards so normal mouse interaction does not take foreground focus from Genshin.
+- Bubble, ROI editor, and the passive main panel use Windows no-activate/non-focus-stealing guards so normal mouse interaction does not take foreground focus from Genshin.
 - Unknown artifact set names no longer block upgrade-roll evaluation. The scanner prefers the green set-name line and reports optional set warnings separately from required OCR fields.
 - Beginner-facing evaluation separates Active Crit Value, Known Crit Value, Expected Crit Value, Useful Roll Value, and exact Chance to Reach Target. Legacy raw score remains diagnostics-only.
 - Metric info icons use real hover/focus tooltips, not browser-only title text.

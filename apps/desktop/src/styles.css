@@ -588,8 +588,8 @@ textarea {
 
 .assistant-launcher {
   position: relative;
-  width: min(58px, 100vw);
-  height: min(58px, 100vh);
+  width: 100%;
+  height: 100%;
   min-width: 0;
   min-height: 0;
   border-radius: 50%;
@@ -613,8 +613,8 @@ textarea {
   position: relative;
   display: grid;
   place-items: center;
-  width: min(34px, 64vmin);
-  height: min(34px, 64vmin);
+  width: clamp(30px, 48vmin, 42px);
+  height: clamp(30px, 48vmin, 42px);
 }
 
 .assistant-logo-mark__gem {
@@ -632,10 +632,10 @@ textarea {
 
 .assistant-launcher__dot {
   position: absolute;
-  right: 8px;
-  bottom: 8px;
-  width: min(9px, 18vmin);
-  height: min(9px, 18vmin);
+  right: max(7px, 12%);
+  bottom: max(7px, 12%);
+  width: clamp(8px, 13vmin, 12px);
+  height: clamp(8px, 13vmin, 12px);
   border: 2px solid rgba(25, 24, 21, 0.92);
   border-radius: 50%;
   background: #d7c8aa;

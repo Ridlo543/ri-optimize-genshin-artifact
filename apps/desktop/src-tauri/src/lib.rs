@@ -87,10 +87,10 @@ async fn set_assistant_window_bounds(
 ) -> Result<(), String> {
     let window = get_window(&app, "assistant-bubble")?;
     set_window_bounds(&window, rect)?;
-    set_no_activate(&window, true)?;
     window
-        .set_focusable(true)
+        .set_focusable(false)
         .map_err(|error| error.to_string())?;
+    set_no_activate(&window, true)?;
     window
         .set_always_on_top(true)
         .map_err(|error| error.to_string())?;
@@ -343,12 +343,12 @@ fn hide_capture_occluders(app: &tauri::AppHandle) -> Result<Vec<tauri::WebviewWi
 
 fn restore_capture_occluders(windows: Vec<tauri::WebviewWindow>) -> Result<(), String> {
     for window in windows {
-        set_no_activate(&window, true)?;
         if window.label() == "assistant-bubble" {
             window
-                .set_focusable(true)
+                .set_focusable(false)
                 .map_err(|error| error.to_string())?;
         }
+        set_no_activate(&window, true)?;
         show_topmost_no_activate(&window)?;
     }
 
@@ -482,6 +482,7 @@ fn show_topmost_no_activate(window: &tauri::WebviewWindow) -> Result<(), String>
     }
 
     let hwnd = window.hwnd().map_err(|error| error.to_string())?;
+    set_no_activate(window, true)?;
     unsafe {
         ShowWindow(hwnd.0, SW_SHOWNOACTIVATE);
         let ok = SetWindowPos(
@@ -497,6 +498,7 @@ fn show_topmost_no_activate(window: &tauri::WebviewWindow) -> Result<(), String>
             return Err("Unable to show window without activation.".to_string());
         }
     }
+    set_no_activate(window, true)?;
 
     Ok(())
 }
@@ -521,11 +523,11 @@ pub fn run() {
                 overlay.hide()?;
             }
             if let Some(bubble) = app.get_webview_window("assistant-bubble") {
-                set_no_activate(&bubble, true).map_err(std::io::Error::other)?;
                 let _ = bubble.set_shadow(false);
-                // Keep the bubble webview focusable so it can receive click events, while
-                // WS_EX_NOACTIVATE keeps the game foreground window from being stolen.
-                bubble.set_focusable(true)?;
+                // Mouse events still reach the WebView, but keyboard focus stays with
+                // the game so borderless/fullscreen clients are not minimized by clicks.
+                bubble.set_focusable(false)?;
+                set_no_activate(&bubble, true).map_err(std::io::Error::other)?;
                 bubble.set_always_on_top(true)?;
                 bubble.set_size(PhysicalSize::new(72, 72))?;
                 show_topmost_no_activate(&bubble).map_err(std::io::Error::other)?;

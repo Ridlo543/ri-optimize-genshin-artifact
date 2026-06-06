@@ -33,8 +33,8 @@ test("overlay and assistant routes keep every root layer transparent", async ({ 
   await expect(launcher.locator(".lucide-triangle-alert")).toHaveCount(0);
   await expect.poll(() => launcher.textContent()).toBe("");
   const bounds = await launcher.boundingBox();
-  expect(bounds?.width).toBe(58);
-  expect(bounds?.height).toBe(58);
+  expect(bounds?.width).toBe(72);
+  expect(bounds?.height).toBe(72);
   await page.screenshot({ path: testInfo.outputPath("assistant-collapsed.png"), omitBackground: true });
 
   await launcher.click();
@@ -93,16 +93,22 @@ test("fixture playground ROI can resize and lock", async ({ page }, testInfo) =>
   await expect(page.locator(".fixture-stage__image")).toBeVisible();
 
   const roi = page.locator(".roi-box");
-  const handle = page.locator(".roi-handle--se");
+  const handle = page.locator(".roi-handle--nw");
+  const stage = page.locator(".fixture-stage");
   const before = await roi.boundingBox();
   const handleBounds = await handle.boundingBox();
+  const stageBounds = await stage.boundingBox();
   expect(before).not.toBeNull();
   expect(handleBounds).not.toBeNull();
+  expect(stageBounds).not.toBeNull();
 
-  await page.mouse.move(handleBounds!.x + handleBounds!.width / 2, handleBounds!.y + handleBounds!.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(handleBounds!.x + 45, handleBounds!.y + 35);
-  await page.mouse.up();
+  await handle.dragTo(stage, {
+    sourcePosition: { x: handleBounds!.width / 2, y: handleBounds!.height / 2 },
+    targetPosition: {
+      x: handleBounds!.x - stageBounds!.x + handleBounds!.width / 2 - 45,
+      y: handleBounds!.y - stageBounds!.y + handleBounds!.height / 2 - 35
+    }
+  });
 
   const after = await roi.boundingBox();
   expect(after!.width).toBeGreaterThan(before!.width);

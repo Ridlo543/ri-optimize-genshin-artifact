@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ScannerArtifactResult } from "@ri-genshin/artifact-schema";
@@ -6,6 +7,9 @@ import { AssistantBubbleSurface } from "./AssistantBubbleSurface";
 import { buildAssistantSummary } from "./assistantSummary";
 import {
   assistantWindowRect,
+  COLLAPSED_ASSISTANT_SIZE,
+  EXPANDED_ASSISTANT_DETAILS_SIZE,
+  EXPANDED_ASSISTANT_SIZE,
   getAssistantWindowBounds,
   lockRoiEditor,
   openRoiEditor,
@@ -54,6 +58,7 @@ export function AssistantBubbleApp() {
   const lastHashRef = useRef<string | null>(result?.capture.regionHash ?? null);
   const summary = useMemo(() => buildAssistantSummary(result, profile), [profile, result]);
   const correction = useMemo(() => getScannerCorrectionState(result), [result]);
+  const surfaceStyle = useMemo(() => browserAssistantSurfaceStyle(collapsed, detailsOpen), [collapsed, detailsOpen]);
   const statusRef = useRef(status);
   const draggingRef = useRef(false);
   const dragSettledTimerRef = useRef<number | null>(null);
@@ -324,6 +329,7 @@ export function AssistantBubbleApp() {
       detailsOpen={detailsOpen}
       error={error}
       hash={result?.capture.regionHash ?? ""}
+      style={surfaceStyle}
       levelCorrection={
         correction.available
           ? {
@@ -353,6 +359,18 @@ export function AssistantBubbleApp() {
       onQuit={() => void handleQuit()}
     />
   );
+}
+
+function browserAssistantSurfaceStyle(collapsed: boolean, detailsOpen: boolean): CSSProperties | undefined {
+  if (isTauri()) {
+    return undefined;
+  }
+
+  const size = collapsed ? COLLAPSED_ASSISTANT_SIZE : detailsOpen ? EXPANDED_ASSISTANT_DETAILS_SIZE : EXPANDED_ASSISTANT_SIZE;
+  return {
+    width: `min(${size.width}px, 100vw)`,
+    height: `min(${size.height}px, 100vh)`
+  };
 }
 
 function sameResult(left: ScannerArtifactResult | null, right: ScannerArtifactResult | null): boolean {

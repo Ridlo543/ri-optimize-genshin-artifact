@@ -43,7 +43,7 @@
 - If the only missing OCR field is `level`, the bubble and main panel show a `+0..+20` correction selector; evaluation resumes after the user applies the visible level.
 - If `slotKey` or `mainStatKey` is missing, the bubble and main panel show targeted selectors for the visible slot/main stat; evaluation resumes after applying correction.
 - Fixture/sample OCR controls are development tools in the main panel, separated from the primary live scan controls.
-- `assistant-bubble` uses Windows no-activate while remaining focusable enough to receive button clicks. `roi-overlay` uses no-activate/non-focusable flags and becomes click-through when locked. Mouse interaction must not move foreground focus away from Genshin.
+- `assistant-bubble` uses Windows no-activate and a non-focusable host while still receiving mouse clicks. `roi-overlay` uses no-activate/non-focusable flags and becomes click-through when locked. Mouse interaction must not move foreground focus away from Genshin.
 - The main panel opens in passive no-activate mode. Its keyboard icon explicitly enables focusable keyboard/manual-correction mode; this deliberate focus transfer can minimize exclusive fullscreen.
 - The default MVP action is manual `Analyze`; loading an overlay or fixture must not start OCR.
 - Watch mode is explicit opt-in. It polls `classify-region-artifact` around once per second and only calls `scan-region-artifact` when `capture.regionHash` changes.

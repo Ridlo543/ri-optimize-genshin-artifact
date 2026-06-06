@@ -27,7 +27,7 @@ export interface AssistantBubbleSurfaceProps {
   detailsOpen: boolean;
   error?: string;
   hash?: string;
-  style?: CSSProperties;
+  style?: CSSProperties | undefined;
   levelCorrection?: AssistantLevelCorrection | undefined;
   onToggleCollapsed: () => void;
   onScan: () => void;

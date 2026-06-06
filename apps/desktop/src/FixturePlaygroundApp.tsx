@@ -13,6 +13,7 @@ import { RoiEditor } from "./RoiEditor";
 import { classifyRegionFixture, parseRegionFixture } from "./scanner";
 import { saveLatestScannerResult } from "./roi";
 import { useSharedWatchState } from "./assistantRuntimeState";
+import { COLLAPSED_ASSISTANT_SIZE, EXPANDED_ASSISTANT_DETAILS_SIZE, EXPANDED_ASSISTANT_SIZE } from "./nativeWindows";
 
 export function FixturePlaygroundApp() {
   const initialFixture = getFixturePlaygroundEntry(new URLSearchParams(window.location.search).get("fixture"));
@@ -29,7 +30,8 @@ export function FixturePlaygroundApp() {
   const lastHashRef = useRef<string | null>(null);
   const [stageSize, setStageSize] = useState({ width: 1920, height: 1200 });
   const summary = useMemo(() => buildAssistantSummary(result), [result]);
-  const bubblePlacement = placeAssistantBubble(region, stageSize, collapsed ? { width: 58, height: 58 } : { width: 340, height: 260 });
+  const bubbleSize = collapsed ? COLLAPSED_ASSISTANT_SIZE : detailsOpen ? EXPANDED_ASSISTANT_DETAILS_SIZE : EXPANDED_ASSISTANT_SIZE;
+  const bubblePlacement = placeAssistantBubble(region, stageSize, bubbleSize);
 
   useEffect(() => {
     const element = stageRef.current;
@@ -152,7 +154,9 @@ export function FixturePlaygroundApp() {
           style={{
             position: "absolute",
             left: `${bubblePlacement.left}px`,
-            top: `${bubblePlacement.top}px`
+            top: `${bubblePlacement.top}px`,
+            width: `${bubbleSize.width}px`,
+            height: `${bubbleSize.height}px`
           }}
           onToggleCollapsed={() => setCollapsed((value) => !value)}
           onScan={() => void analyze()}
