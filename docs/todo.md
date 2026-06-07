@@ -1,310 +1,226 @@
 # TODO
 
-## Current Context
+## Current Status
 
-- The repo has a desktop-first scaffold: React/Tauri UI, TypeScript probability core, and a C# scanner sidecar.
-- Current implemented importer/evaluator status:
-  - GOOD artifacts normalize through `packages/artifact-schema`.
-  - Probability core supports rarity `2..5` with rarity-specific level caps and roll tables.
-  - Desktop UI can load/paste scanner JSON, a single GOOD artifact, fixture `samples[]`, or full GOOD `artifacts[]`.
-  - Scanner sidecar has Tesseract-based substat crop OCR for fixture images, plus OCR-like text parser tests.
-- `data/example/Database_1_2026-06-04_18-43-27.json` is a GOOD export with `1886` artifacts. It also contains characters, weapons, builds, teams, and display settings; future import work should focus on `artifacts`.
-- `data/example/picture/` has full screenshot examples for two layouts:
-  - Equipped-character artifact view: character visible in the center; right panel has artifact details/actions.
-  - Bag/inventory artifact view: grid fills the left/middle; right panel has artifact card; diagnostic screenshots include green item-cell rectangles from Inventory Kamera.
-- `data/example/artifacts` is a symlink to local Inventory Kamera logging output with `1783` artifact folders. Each folder has `artifact.json`, `card.png`, and region crops such as `substats/substats.png`.
-- `data/fixtures/` now contains a small copied subset for fast OCR/import/manual testing.
+This repo is a desktop-first Genshin artifact assistant with:
 
-## Completed In 2026-06-05 Session
+- React/Tauri UI in `apps/desktop`
+- Windows scanner/OCR sidecar in `apps/scanner-win`
+- GOOD schema normalization in `packages/artifact-schema`
+- Evaluation logic in `packages/probability-core`
 
-- [x] Normalize GOOD import before mapping into `ArtifactInput`.
-  - Placeholder substats with empty `key` or invalid/non-positive values are dropped.
-  - A single real `unactivatedSubstats` entry is preserved as inactive known substat.
-  - Non-milestone levels `0..20` are supported; levels outside that range are skipped.
-- [x] Add GOOD batch evaluation path.
-  - Reads GOOD artifact lists from full export `artifacts[]` or fixture `samples[]`.
-  - Evaluates supported 2-star, 3-star, 4-star, and 5-star artifacts.
-  - Reports skipped artifacts with reason and normalization warnings.
-- [x] Improve UI manual correction/import.
-  - Supports pasted JSON and file import.
-  - Recalculates after valid JSON edits.
-  - Shows validation errors/warnings before trusting the recommendation.
-- [x] Add expanded scanner confidence output.
-  - Fields now include set, slot, main stat, level, substats, lock, equipped, and location.
-  - UI flags low-confidence scanner fields for review.
-- [x] Add scanner OCR-like text parser tests.
-  - `artifact0` active substats are covered with expected OCR-like text.
-  - `artifact1000` unactivated suffix is covered with expected OCR-like text.
-- [x] Add true substat image OCR for fixture crops.
-  - `ocr-substats <imagePath>` reads `substats.png` through Tesseract.
-  - `parse-fixture-artifact <fixtureFolder>` compares OCR output with fixture `artifact.json`.
-  - `artifact0` and `artifact1000` fixture tests pass.
-- [x] Add fixture full-card OCR assembly.
-  - `parse-fixture-card <fixtureFolder>` reads fixture crops for set/name, slot, main stat, level, lock, equipped/location, and substats.
-  - Fixture-card output includes `ScanResult`, per-field confidence, raw OCR text diagnostics, and mismatches against `artifact.json`.
-  - Tests cover +20 flower, +0 plume with unactivated substat, equipped location, and unlocked lock state.
-- [x] Verify native Tauri Rust backend is available.
-  - Rust is installed under `%USERPROFILE%\.cargo\bin`; current shell may need PATH prepended before running cargo.
-  - `cargo check` passes after publishing the Tauri sidecar binary.
-  - Tauri production config now includes scanner `externalBin` and a publish script for the C# sidecar.
-- [x] Calibrate full screenshot artifact parsing against sample images.
-  - `parse-screenshot-artifact <imagePath>` detects bag/inventory card layout and equipped-character panel layout.
-  - Sample screenshot tests cover `bag-inventory-raw-1920x1200.png`, `artifact-inventory-plus20.jpg`, and `artifact-inventory-unactivated.jpg`.
-  - `scan-visible-artifact` now attempts the same screenshot OCR assembly after capturing the live Genshin client.
-- [x] Add scanner confidence trust gate in the UI path.
-  - `packages/artifact-schema` exposes `assessScannerResultTrust`.
-  - Severe low-confidence required fields block evaluation instead of showing a recommendation.
-  - Medium-confidence fields still allow evaluation but show OCR review warnings.
-  - `pnpm scanner:screenshots` smoke-tests all current full screenshot samples.
-- [x] Add native UI flow for screenshot fixture OCR.
-  - Desktop toolbar includes a screenshot fixture selector and OCR button.
-  - The UI calls Tauri command `scanner_parse_screenshot_fixture`, which maps fixture file names inside the scanner sidecar.
-  - This avoids relying on browser file inputs for filesystem paths.
-- [x] Add passive screen-state detection before OCR.
-  - Scanner emits `screenState` with `game-not-found`, `artifact-bag-grid`, `artifact-bag-detail`, `character-artifact-detail`, `paimon-menu`, or `unknown-game-screen`.
-  - `bag-grid-live-1280x800.png` is a regression fixture for grid-only Artifact Bag and must not trigger Tesseract OCR.
-  - `classify-visible-screen`, `classify-screenshot-artifact`, and `classify-screenshot-fixture` are implemented.
-  - Desktop Watch mode polls classification about once per second and only scans when the screen is OCR-ready and the screenshot hash changed.
-- [x] Add ROI-first scanner and floating assistant UI.
-  - `scan-region-artifact --region-json <json>` captures Genshin client, crops the normalized ROI, saves `logs/scanner/region-last.png`, writes per-scan snapshots under `logs/scanner/captures/`, and emits `capture.scanId` plus `capture.regionHash`.
-  - `classify-region-artifact --region-json <json>` hashes/classifies the ROI before OCR.
-  - `parse-region-fixture` and `classify-region-fixture` cover curated screenshot fixtures without relying on a live game.
-  - Tauri now has `roi-overlay` and `assistant-bubble` windows in addition to the main panel.
-  - ROI edit mode is draggable/resizable; locked mode is click-through via Tauri `setIgnoreCursorEvents(true)`.
-  - The assistant bubble shows compact profile-based decision, beginner-facing probability metrics, OCR confidence, and controls for Analyze/Watch/Edit ROI/Details/Open Panel.
-  - Expanded bubble has an explicit minimize icon button; the title is no longer the hidden collapse control.
-  - The collapsed launcher always shows the app logo mark; OCR/review state is indicated by ring/dot color, not by replacing the logo with a warning icon.
-  - Native bubble/ROI windows re-assert topmost/no-activate when bounds are updated, so they stay above normal windowed/borderless Genshin windows.
-- [x] Add offline fixture playground and manual Analyze flow.
-  - `http://localhost:5173?window=fixture-playground&fixture=character-plus20` renders fixture screenshots from `data/example/picture` with the shared ROI editor and assistant bubble.
-  - Fixture catalog includes equipped-character and bag/inventory screenshots with default normalized ROI rectangles.
-  - Browser preview never scans on load; the user must click `Analyze`.
-  - `Watch` is opt-in and only polls fixture/ROI hashes after the user enables it.
-  - Long recommendation explanations and OCR warnings are kept inside the bubble `Details` overflow.
-  - Scanner fixture lookup now accepts safe file names from `data/example/picture` as well as `data/fixtures/screenshots`.
-- [x] Harden ROI parser coverage for all playground screenshots.
-  - `Royal Flora` now maps to `NoblesseOblige`.
-  - `Instructor's Feather Accessory` now maps to `Instructor`.
-  - Bag-card substat crop now includes the `(unactivated)` line while still letting `SubstatTextParser` stop at set bonus text.
-  - `bag-4star` playground fallback now matches the real Instructor plume screenshot.
-  - `pnpm scanner:regions` smoke-tests all current fixture playground screenshots.
-- [x] Fix Tauri dev startup preflight.
-  - `pnpm tauri:dev` now runs `scripts/tauri-dev.ps1`.
-  - The script adds `%USERPROFILE%\.cargo\bin` to `PATH` when Cargo is installed there.
-  - The script stops stale repo-owned Vite servers on port `5173` and refuses to stop unrelated processes.
-- [x] Fix live scanner DPI scaling.
-  - Scanner startup enables Windows DPI awareness before reading the Genshin client rectangle.
-  - `pnpm scanner:status` now reports the tested fullscreen/windowed client as `1920x1200` instead of DPI-scaled `1280x800`.
-- [x] Verify one live ROI scan against Genshin at 1920x1200.
-  - A bag-card ROI scan returned a complete `NoblesseOblige` flower result with level, main stat, substats, lock, location, and crop paths.
-  - `Exile's Flower` OCR now maps to GOOD set key `TheExile` for 4-star bag-card cases.
-  - `Berserker's Bone Goblet` OCR now maps to GOOD set key `Berserker` for lower-rarity bag-card cases.
-- [x] Fix native floating-window lifecycle and foreground focus.
-  - Startup now shows only the circular assistant bubble; main and ROI windows remain hidden.
-  - Transparent bubble/ROI routes no longer inherit the dark root background.
-  - Rust owns physical-pixel native window bounds and awaited native window operations.
-  - Bubble uses Windows no-activate while remaining clickable; ROI editor and passive main panel use no-activate guards so mouse clicks preserve Genshin foreground focus.
-  - Main-panel keyboard input is an explicit action because taking keyboard focus can minimize exclusive fullscreen.
-  - `pnpm tauri:smoke` verifies native startup visibility, expand behavior, and foreground PID preservation.
-  - The native focus smoke was verified with a live `GenshinImpact` process; its foreground PID remained unchanged after clicking the bubble and passive main panel.
-  - Playwright verifies transparent root layers, fixture ROI resize/lock, and responsive main-panel overflow.
-- [x] Fix 5-star live scan missing-level failure path.
-  - ROI results now include `artifactDraft` and `missingFields` when OCR misses a required field, instead of losing all detected artifact context.
-  - `Review Level` replaces the misleading `Waiting` state when an OCR-ready ROI only lacks `level`.
-  - Bubble and main panel expose a `+0..+20` manual level correction selector; applying it builds a valid scanner result and recalculates the recommendation.
-  - `Analyze` auto-locks/hides the ROI overlay before scanning if edit mode is still active.
-  - Fixture/dev OCR controls are separated from the main live scan toolbar.
-  - Regression tests cover Royal Flora 5-star rarity, level parser normalization, scanner draft output, trust policy, assistant summary, and manual level correction.
-- [x] Add low-rarity artifact support.
-  - Schema and GOOD normalization now accept 2-star, 3-star, 4-star, and 5-star artifacts.
-  - Rarity-specific max levels are enforced: 2-star `+4`, 3-star `+12`, 4-star `+16`, and 5-star `+20`.
-  - Probability core uses rarity-specific minor roll tables instead of 5-star-only values.
-  - Scanner bag-card detection recognizes green 2-star, blue 3-star, purple 4-star, and orange 5-star panels.
-  - Fixture playground and `pnpm scanner:regions` include `GenshinImpact_2star.jpg` and `GenshinImpact_3star.png`.
-- [x] Make set OCR optional and resilient.
-  - Scanner resolves known set keys from the green set display-name line before falling back to artifact item names.
-  - `Disenchantment in Deep Shadow` maps to GOOD key `DisenchantmentInDeepShadow`.
-  - Unknown set, lock, equipped, and location readings no longer block otherwise-valid upgrade-roll evaluation.
-- [x] Add auditable profile-based evaluation.
-  - Primary metrics are Active Crit Value, Known Crit Value, Expected Crit Value, normalized Useful Roll Value, and exact Chance to Reach Target.
-  - Results include model version, selected profile context, main-stat fit, and explicit `set fit: not evaluated`.
-  - Legacy raw weighted score remains diagnostics-only.
-- [x] Add draggable persistent assistant placement.
-  - Collapsed launcher distinguishes click from drag with a movement threshold.
-  - Expanded assistant header is draggable; placement persists relative to the Genshin client and can be reset from Details.
-- [x] Simplify beginner-facing UI.
-  - Primary toolbar contains Analyze, Watch, Edit ROI, and evaluation profile.
-  - Import, fixtures, raw scanner JSON, and per-field OCR confidence live under Developer Tools.
-  - All primary metrics expose keyboard-accessible English explanations.
-- [x] Stabilize bubble drag, tooltip, and manual OCR regressions.
-  - Bubble drag now suppresses React bounds sync during native drag and persists final placement after movement settles.
-  - Native bubble host is non-focusable/no-activate; the launcher fills the host window so DPI 150% clicks do not land on transparent dead space.
-  - Expanded bubble no longer draws a visible outer transparent-window border; state is shown through content/dot styling.
-  - Live Tauri region scans hide assistant/main windows during `CopyFromScreen` capture and mark `capture.occlusionAvoided`.
-  - Watch state is shared between bubble, fixture playground, and main panel.
-  - Metric help uses real hover/focus tooltips instead of browser `title`.
-  - Manual OCR correction supports missing level, slot, and main stat.
-  - `data/log-manual` screenshots are accepted as safe screenshot fixtures and covered by `pnpm scanner:manual-logs`.
-  - Character artifact panels with wrapped long names use a merged crop fallback; bag/character manual logs no longer fail only because set OCR is unknown.
-- [x] Close the second manual OCR regression batch.
-  - Character panel classification now combines red-panel and beige-card evidence so borderline red panels do not fall into the bag profile.
-  - Long-title character panels use corrected level/substat crops; star-count OCR is no longer accepted as an artifact level unless a visible `+` is present.
-  - Short `Af`/`Hf`/`Df` OCR tokens can recover percentage main stats for Sands/Circlet, while Goblet remains strict to avoid elemental-stat ambiguity.
-  - Flower and Plume main stats are safely inferred as flat HP and flat ATK when their labels are unreadable.
-  - Manual correction only offers main stats valid for the selected slot and rejects impossible slot/main-stat combinations.
-  - `pnpm scanner:manual-logs` covers twelve real screenshots, including `error_artifact_character_detail_2/3/4.png`, `error_artifact_bag_detail_2.png`, the manual bag screenshots `GenshinImpact_WGHmIpkN58.jpg` / `GenshinImpact_zuCNecgQiu.jpg`, and `iTPXIcUjaV.png`.
-  - Manual correction dropdowns no longer default to `Flower / HP`; missing slot/main-stat correction starts with explicit placeholder choices to avoid accidental wrong Apply actions.
-  - Scanner logs are rooted at repo `logs/scanner` even when invoked by Tauri from `apps/desktop/src-tauri`.
-  - Tauri debug builds run the scanner via `dotnet run --project apps/scanner-win` so `pnpm tauri:dev` does not use a stale Debug or bundled scanner executable.
+The scanner currently supports:
 
-## Next High Priority TODO
+- Full screenshot parsing for bag detail and character artifact detail
+- ROI-first parsing for live/native flows
+- Manual correction when a required OCR field is missing
+- Real screenshot regressions under `data/log-manual`
 
-- Continue live ROI calibration with Genshin.
-  - Run native Tauri, resize the red ROI around the right artifact card, click `Analyze`, and confirm the app auto-locks the ROI before scanning.
-  - Confirm `logs/scanner/region-last.png` contains only the card/panel and `capture.scanId` points to the matching snapshot under `logs/scanner/captures/`.
-  - Bag artifact card fixtures at 1920x1200 pass; still test live bag and character artifact panel layouts across additional 16:9/16:10 client sizes.
-  - If assistant UI overlaps the card before scan, native Tauri should hide it during capture; verify `capture.occlusionAvoided=true` in the scan JSON.
-  - Capture failing `capture.scanId` snapshot samples before changing panel-relative crop profiles.
-  - Preserve the screenshot/OCR-only safety policy.
-- Add live manual scanner verification.
-  - Run with Genshin visible in windowed or borderless mode.
-  - Confirm `logs/scanner/region-last.png` captures the selected ROI.
-  - Confirm OCR confidence drops or blocks recommendation when fields are missing.
-  - Confirm a missing-level scan shows `Review Level` and evaluates after selecting the visible `+0..+20` level.
-- Continue manual native Tauri checks over live Genshin.
-  - Native startup/focus behavior is covered by `pnpm tauri:smoke`.
-  - Still verify ROI handle usability and locked overlay behavior over the live game at additional resolutions.
-  - If the bubble only appears after minimizing Genshin, switch Genshin from exclusive fullscreen to borderless/windowed and rerun `pnpm tauri:dev`; Windows can keep exclusive fullscreen above normal desktop overlays.
-- Manual visual pass for fixture playground.
-  - Run `pnpm dev:desktop` and open the fixture playground routes below.
-  - Confirm the red ROI aligns with the right artifact panel on both character and bag screenshots.
-  - Confirm the collapsed circular bubble does not cover important artifact text.
-  - Confirm no analysis runs until `Analyze` is clicked.
+## Last Verified State
 
-## Manual Testing Checklist
+Verified on 2026-06-07:
 
-- Desktop UI:
-  - Run `pnpm dev:desktop`.
-  - Open `http://localhost:5173`.
-  - Open `http://localhost:5173?window=fixture-playground&fixture=character-plus20`.
-  - Open `http://localhost:5173?window=fixture-playground&fixture=bag-plus20`.
-  - In fixture playground, click the circular bubble, click `Analyze`, and confirm the assistant metrics/details update.
-  - Toggle `Details`; confirm long text scrolls inside the bubble instead of covering the artifact panel.
-  - Click the `Kembali ke bubble` minimize icon; confirm the assistant returns to the compact circular logo.
-  - Toggle `Watch`; confirm it starts only after the explicit user action.
-  - Confirm fixture loads and recommendation appears.
-  - Edit Scanner JSON and confirm score/recommendation recalculates.
-  - In native Tauri mode, select a screenshot fixture and press `OCR`; confirm Scanner JSON updates and recommendation/warnings recalculate.
-  - In native Tauri mode, use `Edit ROI`, resize the red box over the artifact card, lock it, and confirm game clicks pass through the overlay.
-  - Use the assistant bubble `Analyze` button and confirm compact decision/metrics update.
-  - If the scan returns `Review Level`, choose the visible level and confirm the recommendation appears without rescanning.
-  - If the scan returns `Review Slot` or `Review Main Stat`, select the visible field and confirm the recommendation appears without rescanning.
-  - Toggle assistant bubble `Watch`; change artifact selection and confirm scan refreshes only after ROI hash changes.
-  - Confirm normal bubble, ROI editor, and passive main-panel clicks do not minimize Genshin.
-  - Use the main-panel keyboard icon only for deliberate keyboard focus/manual correction.
-- Scanner sidecar:
-  - Run `pnpm scanner:status`.
-  - Run `pnpm scanner:sample`.
-  - Run `pnpm scanner:classify`.
-  - Run `pnpm scanner:scan` with Genshin closed and confirm structured JSON error.
-  - Run `pnpm scanner:scan` with Genshin open and confirm `logs/scanner/visible-artifact-last.png` is created.
-  - Run `dotnet run --project apps/scanner-win/GenshinArtifactScanner.Win.csproj -- classify-screenshot-fixture bag-grid-live-1280x800.png`.
-  - Run `dotnet run --project apps/scanner-win/GenshinArtifactScanner.Win.csproj -- parse-fixture-card data/fixtures/artifacts/artifact0`.
-  - Run `dotnet run --project apps/scanner-win/GenshinArtifactScanner.Win.csproj -- parse-screenshot-artifact data/fixtures/screenshots/bag-inventory-raw-1920x1200.png`.
-  - Run `dotnet run --project apps/scanner-win/GenshinArtifactScanner.Win.csproj -- parse-screenshot-artifact data/fixtures/screenshots/artifact-inventory-unactivated.jpg`.
-  - Run `dotnet run --project apps/scanner-win/GenshinArtifactScanner.Win.csproj -- parse-screenshot-fixture bag-inventory-raw-1920x1200.png`.
-  - Run `dotnet run --project apps/scanner-win/GenshinArtifactScanner.Win.csproj -- parse-region-fixture bag-inventory-raw-1920x1200.png "{ \"x\": 0.68125, \"y\": 0.1, \"width\": 0.2572916667, \"height\": 0.8016666667, \"unit\": \"normalized-client\" }"`.
-  - Run `dotnet run --project apps/scanner-win/GenshinArtifactScanner.Win.csproj -- parse-region-fixture artifact-inventory-unactivated.jpg "{ \"x\": 0.75625, \"y\": 0.075, \"width\": 0.2427083333, \"height\": 0.8333333333, \"unit\": \"normalized-client\" }"`.
-  - Run `dotnet run --project apps/scanner-win/GenshinArtifactScanner.Win.csproj -- parse-region-fixture GenshinImpact_lKJAl1Pymu.jpg "{ \"x\": 0.75625, \"y\": 0.075, \"width\": 0.2427083333, \"height\": 0.8333333333, \"unit\": \"normalized-client\" }"`.
-  - Run `dotnet run --project apps/scanner-win/GenshinArtifactScanner.Win.csproj -- parse-region-fixture "ArtifactsInventory1_8x5 - weight 0.png" "{ \"x\": 0.68125, \"y\": 0.1, \"width\": 0.2572916667, \"height\": 0.8016666667, \"unit\": \"normalized-client\" }"`.
-  - Run `pnpm scanner:regions` to verify all fixture playground ROI examples.
-  - Run `pnpm scanner:manual-logs` to verify current real manual screenshots from `data/log-manual`.
-  - Run `pnpm scanner:screenshots` to smoke-test all current full screenshot fixtures.
-- GOOD import:
-  - Load `data/fixtures/good/artifact-samples.json`.
-  - Confirm placeholder entries are filtered before mapping.
-  - Confirm 2-star, 3-star, 4-star, 5-star, and odd-level artifacts are handled intentionally.
-- OCR crop validation:
-  - Open `data/fixtures/artifacts/artifact0/substats/substats.png`; expected four active substats.
-  - Open `data/fixtures/artifacts/artifact1000/substats/substats.png`; expected three active substats and one unactivated `atk_`.
-  - Compare OCR result against each fixture folder's `artifact.json`.
-- Full screenshot layout validation:
-  - Use `data/fixtures/screenshots/artifact-inventory-plus20.jpg` and `artifact-inventory-unactivated.jpg` for equipped-character layout calibration.
-  - Use `data/fixtures/screenshots/bag-inventory-raw-1920x1200.png` for bag/inventory layout calibration.
-  - Use `data/fixtures/screenshots/bag-grid-diagnostic-*.png` as expected grid-detection visual references.
+- `dotnet test apps/scanner-win.Tests/GenshinArtifactScanner.Win.Tests.csproj --no-restore`
+  - Passed: `91/91`
+- `pnpm --filter @ri-genshin/desktop build:tauri`
+  - Passed
+- `pnpm --filter @ri-genshin/desktop tauri build`
+  - Passed
 
-## Known Data Pitfalls
+Important verified repros:
 
-- GOOD placeholder entries exist:
-  - `substats` may contain `{ "key": "", "value": 0 }`.
-  - `unactivatedSubstats` may contain one real stat plus blank placeholders.
-- Export shapes differ:
-  - Full GOOD export uses string IDs such as `artifact_2087`.
-  - Inventory Kamera logging fixture files use numeric IDs such as `1000`.
-- Probability core supports rarity 2-star through 5-star. One-star artifacts remain out of scope until a real fixture and product need appear.
-- Artifact levels must respect rarity caps: 2-star `+4`, 3-star `+12`, 4-star `+16`, and 5-star `+20`.
-- The artifact detail card includes long set bonus text below substats. OCR crop boundaries must stop before set description text.
-- Bag-card unactivated substats can put `(unactivated)` on the line below the substat value, so the crop must include that line and the parser must move the last parsed stat to `unactivatedSubstats`.
-- Low-rarity artifact cards can have fewer visible substats than 5-star cards. A 2-star `+0` artifact can have no visible substats and should still be structurally valid.
-- Equipped-character screenshots and bag/inventory screenshots have different right-panel positioning and surrounding UI. The scanner should classify or calibrate both instead of assuming one crop profile.
-- Full screenshots are useful for layout/crop calibration; diagnostic grid screenshots are useful for item-cell detection; per-folder `substats.png` crops are better for OCR parser unit tests.
-- `data/log-manual` stores real user-captured failure/success screenshots. Treat these as regression fixtures and do not replace them with generated crops unless the original screenshot is preserved.
+- `data/log-manual/bug_new_2/GenshinImpact_yY0600CANu.png`
+  - Character detail classification fixed
+- `data/log-manual/bug_new_2/GenshinImpact_G2ZhtL0vyo.png`
+  - Character detail classification fixed
+- `data/log-manual/bug_new4/GenshinImpact_d6QhwtaXj4.jpg`
+  - Padded ROI bag-detail repro now parses automatically with `level=20`
 
-## Fixture Index
+## Completed Recently
 
-- `data/fixtures/screenshots/artifact-inventory-plus20.jpg`: full inventory screenshot with +20 selected artifact.
-- `data/fixtures/screenshots/artifact-inventory-unactivated.jpg`: full inventory screenshot with visible `(unactivated)` substat text.
-- `data/fixtures/screenshots/bag-inventory-raw-1920x1200.png`: raw bag/inventory layout at 1920x1200.
-- `data/fixtures/screenshots/bag-grid-live-1280x800.png`: live grid-only Artifact Bag capture; expected state is `artifact-bag-grid` and not OCR-ready.
-- `data/fixtures/screenshots/bag-grid-diagnostic-plus20-8x5.png`: 8x5 grid detection overlay for +20 page.
-- `data/fixtures/screenshots/bag-grid-diagnostic-unactivated-8x5.png`: 8x5 grid detection overlay for unactivated page.
-- `data/fixtures/screenshots/bag-grid-diagnostic-4star-8x5.png`: 8x5 grid detection overlay for 4-star page.
-- `data/fixtures/screenshots/bag-item-count.png`: crop for artifact count OCR, expected `1783/2400`.
-- `data/fixtures/artifacts/artifact0`: +20 5-star flower with four active substats.
-- `data/fixtures/artifacts/artifact1000`: +0 5-star plume with unactivated `atk_`.
-- `data/fixtures/artifacts/artifact1021`: elemental goblet with four active substats.
-- `data/fixtures/artifacts/artifact1027`: elemental goblet with unactivated CRIT DMG.
-- `data/fixtures/artifacts/artifact1035`: crit main-stat circlet.
-- `data/fixtures/artifacts/artifact1066`: ER sands with unactivated CRIT Rate.
-- `data/fixtures/artifacts/artifact1743`: 4-star electro goblet edge case.
-- `data/fixtures/artifacts/artifact1082`: unlocked 5-star artifact.
-- `data/fixtures/artifacts/artifact1042`: equipped artifact with unactivated substat.
-- `data/fixtures/artifacts/artifact513`: odd level +17 import edge case.
-- `data/fixtures/good/artifact-samples.json`: selected GOOD export artifacts for importer tests.
-- `data/fixtures/good/database-summary.md`: compact GOOD export observations for future agents.
-- `data/example/picture/GenshinImpact_2star.jpg`: green 2-star Adventurer plume bag-card fixture.
-- `data/example/picture/GenshinImpact_3star.png`: blue 3-star Traveling Doctor plume bag-card fixture.
-- `data/log-manual/success_artifact_character_detail_1.png`: wrapped-name character detail regression, expected Obsidian Codex sands +20.
-- `data/log-manual/error_artifact_character_detail_1.png`: character detail regression where unknown set must not block evaluation.
-- `data/log-manual/error_artifact_bag_detail_1.png`: bag detail regression for `DisenchantmentInDeepShadow` green set-line parsing.
-- `data/log-manual/success_artifact_bag_detail_1_level0.png`: bag detail +0 unactivated regression.
-- `data/log-manual/success_artifact_bag_detail_2_level20.png`: bag detail +20 partial set-name regression.
-- `data/log-manual/error_artifact_character_detail_2.png`: borderline red character panel regression; expected Obsidian Codex ATK% sands +20.
-- `data/log-manual/error_artifact_character_detail_3.png`: character Elemental Mastery sands regression; expected four active substats.
-- `data/log-manual/error_artifact_character_detail_4.png`: long artifact-name character regression; expected +0 with three active and one unactivated substat.
-- `data/log-manual/error_artifact_bag_detail_2.png`: bag Flower regression; expected flat HP main stat and non-blocking set metadata.
-- `data/log-manual/GenshinImpact_WGHmIpkN58.jpg`: manual bag screenshot; expected Obsidian Codex ATK% sands +20 with four exact substats.
-- `data/log-manual/GenshinImpact_zuCNecgQiu.jpg`: manual bag screenshot; expected Disenchantment ATK% sands +0 with three active and one unactivated DEF% substat.
-- `data/log-manual/iTPXIcUjaV.png`: manual bag screenshot with assistant visible; expected Celestial Gift Flower HP +20 with four exact substats.
+### Scanner and OCR
 
-## Automated Follow-Up Tests
+- Fixed teal/non-red character artifact panel classification.
+- Fixed padded ROI level OCR for bag-detail repro `bug_new4`.
+- Level OCR now survives slightly oversized live ROI captures.
+- Screenshot fixture lookup now supports nested files under `data/log-manual`.
+- Manual bag/character regressions are covered by scanner tests.
 
-- [x] Add GOOD normalization tests for blank placeholder substats.
-- [x] Add GOOD import tests for non-milestone levels.
-- [x] Add batch evaluation tests using selected GOOD fixture samples.
-- [x] Add OCR-like parser tests for `artifact0` and `artifact1000` expected text.
-- [x] Add schema tests for fixture `artifact.json` files.
-- [x] Add true image OCR tests for `artifact0/substats.png` and `artifact1000/substats.png`.
-- [x] Add scanner integration tests that compare cropped OCR output to fixture `artifact.json`.
-- [x] Add full screenshot parser tests for bag/inventory and equipped-character sample screenshots.
-- [x] Add scanner confidence trust policy tests.
-- [x] Add screen-state tests for grid-only 1280x800 screenshots and OCR-ready detail screenshots.
-- [x] Add ROI parser tests for bag-card and character-panel screenshot regions.
-- [x] Add desktop assistant summary tests for setup, review ROI, and compact metrics.
-- [x] Add fixture playground catalog and bubble placement tests.
-- [x] Add ROI smoke script/tests for all fixture playground screenshots, including Royal Flora unactivated and Instructor 4-star cases.
-- [x] Add scanner/schema/core/UI tests for 2-star and 3-star bag-card fixtures.
-- [x] Add Playwright/manual UI proof for loading `artifact-samples.json` through the Import control.
-- [x] Add Playwright visual proof for transparent bubble routes, fixture playground ROI resize/lock, and main-panel overflow.
-- [ ] Manually verify live `scan-region-artifact` with Genshin open on character artifact panels and more 16:9/16:10 resolutions.
-- [ ] Manually verify Tauri ROI handle usability and locked overlay behavior over Genshin at additional resolutions.
+### Release Path
+
+- Fixed Tauri non-debug runtime so packaged builds prefer the bundled scanner sidecar.
+- Removed the main release-parity risk where repo-local debug scanner binaries could be used by mistake on developer machines.
+
+### UX Already Landed
+
+- Manual correction supports missing level, slot, and main stat.
+- Bubble/main panel show OCR review states instead of failing silently.
+- ROI-first flow and assistant bubble already exist in native Tauri.
+
+## Completed History
+
+Historical completed work is preserved in:
+
+- [completed-work-log.md](./completed-work-log.md)
+
+Use that file when you need:
+
+- the broader implementation history,
+- older completed milestones from previous sessions,
+- previous fixture/test coverage notes,
+- context for why the current architecture and flows look the way they do.
+
+## Real Next TODO
+
+These are the next tasks that an agent can implement directly.
+
+### 1. Fix small-bubble info/details behavior
+
+Problem:
+
+- User reports the info/details button in the compact/small bubble still does not visibly open details in the release app.
+
+Expected result:
+
+- Clicking the info button in the small bubble expands or reveals the details panel reliably in native Tauri release builds.
+
+Likely files:
+
+- `apps/desktop/src/AssistantBubbleApp.tsx`
+- `apps/desktop/src/AssistantBubbleSurface.tsx`
+- `apps/desktop/src/App.tsx`
+- `apps/desktop/src/styles.css`
+- `apps/desktop/src-tauri/src/lib.rs`
+
+Proof of done:
+
+- Browser path works
+- Native Tauri path works
+- Details content is visible and not clipped
+- Add or update a test if there is a clean seam
+
+### 2. Improve ROI onboarding and failure messaging
+
+Problem:
+
+- User still finds ROI flow confusing.
+- Current error wording is too technical when ROI is wrong or misses the artifact panel.
+
+Expected result:
+
+- ROI setup explains what ROI is in plain language.
+- When OCR/classification fails because the red box misses the panel, the UI says `Adjust ROI` or equivalent user-facing guidance.
+- The ROI-related button/control is visibly highlighted when user action is required.
+
+Likely files:
+
+- `apps/desktop/src/assistantSummary.ts`
+- `apps/desktop/src/AssistantBubbleSurface.tsx`
+- `apps/desktop/src/App.tsx`
+- `apps/desktop/src/styles.css`
+
+Proof of done:
+
+- Summary state distinguishes `missing OCR data` vs `ROI likely wrong`
+- UI text is non-technical
+- ROI action is highlighted in the relevant state
+- Add/update unit tests for summary logic if practical
+
+### 3. Retest packaged installer outside repo runtime
+
+Problem:
+
+- The source tree and bundled sidecar are verified, but the final user-facing installer still needs an explicit retest outside the repo environment.
+
+Expected result:
+
+- Installed release app behaves the same as the verified CLI/source repros.
+
+Required steps:
+
+1. Install from:
+   - `apps/desktop/src-tauri/target/release/bundle/nsis/`
+   - or `apps/desktop/src-tauri/target/release/bundle/msi/`
+2. Run the app outside the repo.
+3. Re-test live/manual scan flow on the failing scenario.
+4. If it still fails, capture:
+   - screenshot
+   - `logs/scanner/captures/*`
+   - exact scan state/message shown in UI
+
+Proof of done:
+
+- New note added to docs with exact installed-app result
+- If still broken, add the new artifact to `data/log-manual` and write a repro note
+
+### 4. Expand live ROI verification across real client sizes
+
+Problem:
+
+- Current automated and fixture coverage is good, but live native ROI behavior across more resolutions is still not fully verified.
+
+Expected result:
+
+- Confirm ROI scanning works on more real Genshin client sizes and layouts.
+
+Required focus:
+
+- 16:9 and 16:10
+- bag detail
+- character detail
+- overlay lock/unlock usability
+- `capture.occlusionAvoided=true` when assistant windows are hidden during scan
+
+Proof of done:
+
+- Add a short results note to docs
+- Preserve any failing screenshots in `data/log-manual`
+
+## Agent Workflow For The Next Person
+
+When picking up one of the tasks above:
+
+1. Reproduce with the exact screenshot or UI path first.
+2. Add or reuse the tightest deterministic test seam available.
+3. Keep scanner fixes in `apps/scanner-win`.
+4. Keep UI/wording fixes in `apps/desktop`.
+5. Re-run the smallest relevant test/build commands.
+6. Update this file with real outcomes, not intentions.
+
+## Useful Commands
+
+Scanner repro:
+
+```powershell
+dotnet run --project apps/scanner-win/GenshinArtifactScanner.Win.csproj -- parse-screenshot-artifact data/log-manual/bug_new4/GenshinImpact_d6QhwtaXj4.jpg --debug
+```
+
+ROI repro:
+
+```powershell
+dotnet run --project apps/scanner-win/GenshinArtifactScanner.Win.csproj -- parse-region-fixture GenshinImpact_d6QhwtaXj4.jpg "{ \"x\": 0.6802083333333333, \"y\": 0.09833333333333333, \"width\": 0.26875, \"height\": 0.8166666666666667, \"unit\": \"normalized-client\" }" --debug
+```
+
+Scanner tests:
+
+```powershell
+dotnet test apps/scanner-win.Tests/GenshinArtifactScanner.Win.Tests.csproj --no-restore
+```
+
+Desktop release build:
+
+```powershell
+pnpm --filter @ri-genshin/desktop build:tauri
+pnpm --filter @ri-genshin/desktop tauri build
+```
+
+## Regression Fixtures To Keep
+
+- `data/log-manual/bug_new_2/GenshinImpact_yY0600CANu.png`
+- `data/log-manual/bug_new_2/GenshinImpact_G2ZhtL0vyo.png`
+- `data/log-manual/bug_new4/GenshinImpact_d6QhwtaXj4.jpg`
+- `data/log-manual/GenshinImpact_WGHmIpkN58.jpg`
+- `data/log-manual/GenshinImpact_zuCNecgQiu.jpg`
+- `data/log-manual/iTPXIcUjaV.png`
+
+Do not replace or delete the original user-provided screenshots when adding new regressions.

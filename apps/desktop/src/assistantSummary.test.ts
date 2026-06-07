@@ -32,7 +32,7 @@ describe("buildAssistantSummary", () => {
 
     expect(buildAssistantSummary(result)).toMatchObject({
       state: "review",
-      title: "Review ROI"
+      title: "Adjust ROI"
     });
   });
 

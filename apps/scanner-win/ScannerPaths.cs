@@ -82,6 +82,14 @@ internal static class ScannerPaths
             {
                 return candidate;
             }
+
+            string? nestedCandidate = Directory.Exists(directory)
+                ? Directory.EnumerateFiles(directory, fileName, SearchOption.AllDirectories).FirstOrDefault()
+                : null;
+            if (!string.IsNullOrWhiteSpace(nestedCandidate))
+            {
+                return nestedCandidate;
+            }
         }
 
         throw new FileNotFoundException("Screenshot fixture was not found.", Path.Combine(candidateDirectories[0], fileName));

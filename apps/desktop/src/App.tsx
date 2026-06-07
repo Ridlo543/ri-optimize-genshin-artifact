@@ -75,7 +75,7 @@ export function App() {
   const [manualLevel, setManualLevel] = useState(0);
   const [manualSlotKey, setManualSlotKey] = useState<ArtifactSlotCorrectionSelection>("");
   const [manualMainStatKey, setManualMainStatKey] = useState<ArtifactMainStatCorrectionSelection>("");
-  const [message, setMessage] = useState("No analysis has run yet. Open Genshin, set the ROI, then click Analyze.");
+  const [message, setMessage] = useState("Set the red ROI box on the artifact detail panel, then click Analyze.");
   const busyRef = useRef(false);
   const watchPollingRef = useRef(false);
   const lastScannedHashRef = useRef<string | null>(null);
@@ -88,6 +88,7 @@ export function App() {
   const screenState = scannerResult?.screenState;
   const correction = useMemo(() => getScannerCorrectionState(scannerResult), [scannerResult]);
   const manualMainStatOptions = getArtifactMainStatOptions(manualSlotKey);
+  const roiAttention = shouldHighlightRoi(scannerResult);
 
   useEffect(() => {
     void refreshStatus();
@@ -314,7 +315,7 @@ export function App() {
           {watching ? <Square size={16} /> : <Eye size={16} />}
           {watching ? "Stop" : "Watch"}
         </button>
-        <button onClick={() => void handleEditRoi()}>
+        <button className={roiAttention ? "roi-action--attention" : undefined} onClick={() => void handleEditRoi()}>
           <SlidersHorizontal size={16} />
           Edit ROI
         </button>
@@ -619,12 +620,35 @@ function parseScannerResult(json: string): ScannerArtifactResult | null {
 
 function formatScannerMessage(result: ScannerArtifactResult, readyMessage: string): string {
   if (result.screenState && !result.screenState.readyForArtifactOcr) {
-    return result.screenState.message;
+    return formatScreenStateMessage(result.screenState);
   }
   if (result.artifact) {
     return readyMessage;
   }
   return result.error ?? result.screenState?.message ?? "Scanner returned no artifact.";
+}
+
+function formatScreenStateMessage(screenState: ScannerScreenState): string {
+  if (screenState.message.startsWith("Review ROI")) {
+    return "Adjust the ROI so the red box covers only the artifact detail panel.";
+  }
+  if (screenState.code === "artifact-bag-grid") {
+    return "Open one artifact detail first, then place the ROI on that detail panel.";
+  }
+  if (screenState.code === "unknown-game-screen") {
+    return "Open Artifact Bag or Character Artifacts, select one artifact, then adjust the ROI.";
+  }
+  return screenState.message;
+}
+
+function shouldHighlightRoi(result: ScannerArtifactResult | null): boolean {
+  if (!result) {
+    return true;
+  }
+  if (result.screenState?.readyForArtifactOcr === false) {
+    return true;
+  }
+  return result.screenState?.message.startsWith("Review ROI") === true || result.error?.startsWith("Review ROI") === true;
 }
 
 function screenStateLabel(screenState: ScannerScreenState): string {

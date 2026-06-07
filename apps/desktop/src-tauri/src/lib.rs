@@ -285,6 +285,7 @@ async fn run_scanner(app: &tauri::AppHandle, args: &[&str]) -> Result<String, St
     }
 
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    #[cfg(debug_assertions)]
     let project = manifest_dir
         .join("..")
         .join("..")
@@ -296,6 +297,11 @@ async fn run_scanner(app: &tauri::AppHandle, args: &[&str]) -> Result<String, St
         return run_dotnet_project(project, args);
     }
 
+    if let Some(result) = run_bundled_sidecar(app, args).await {
+        return result;
+    }
+
+    #[cfg(debug_assertions)]
     let debug_exe = manifest_dir
         .join("..")
         .join("..")
@@ -305,14 +311,12 @@ async fn run_scanner(app: &tauri::AppHandle, args: &[&str]) -> Result<String, St
         .join("net10.0-windows")
         .join("GenshinArtifactScanner.Win.exe");
 
+    #[cfg(debug_assertions)]
     if debug_exe.exists() {
         return run_executable(debug_exe, args);
     }
 
-    if let Some(result) = run_bundled_sidecar(app, args).await {
-        return result;
-    }
-
+    #[cfg(debug_assertions)]
     if project.exists() {
         return run_dotnet_project(project, args);
     }
@@ -320,6 +324,7 @@ async fn run_scanner(app: &tauri::AppHandle, args: &[&str]) -> Result<String, St
     Err("Scanner sidecar was not found.".to_string())
 }
 
+#[cfg(debug_assertions)]
 fn run_dotnet_project(project: PathBuf, args: &[&str]) -> Result<String, String> {
     let mut command = Command::new("dotnet");
     command

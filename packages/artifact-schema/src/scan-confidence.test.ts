@@ -74,8 +74,7 @@ describe("scanner confidence trust policy", () => {
     );
 
     expect(assessment.canEvaluate).toBe(false);
-    expect(assessment.blockingReasons).toContain("Region OCR missing required fields: level.");
-    expect(assessment.blockingReasons).toContain("Scanner artifact draft is missing level.");
+    expect(assessment.blockingReasons).toContain("Review artifact level before evaluating.");
     expect(assessment.blockingReasons).not.toContain("Scanner did not return artifact data.");
   });
 

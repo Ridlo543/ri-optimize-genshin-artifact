@@ -62,6 +62,7 @@ export function AssistantBubbleApp() {
   const lastHashRef = useRef<string | null>(result?.capture.regionHash ?? null);
   const summary = useMemo(() => buildAssistantSummary(result, profile), [profile, result]);
   const correction = useMemo(() => getScannerCorrectionState(result), [result]);
+  const roiAttention = shouldHighlightRoi(result);
   const surfaceStyle = useMemo(() => browserAssistantSurfaceStyle(collapsed, detailsOpen), [collapsed, detailsOpen]);
   const statusRef = useRef(status);
   const draggingRef = useRef(false);
@@ -378,6 +379,7 @@ export function AssistantBubbleApp() {
       detailsOpen={detailsOpen}
       error={error}
       hash={result?.capture.regionHash ?? ""}
+      roiAttention={roiAttention}
       style={surfaceStyle}
       levelCorrection={
         correction.available
@@ -408,6 +410,16 @@ export function AssistantBubbleApp() {
       onQuit={() => void handleQuit()}
     />
   );
+}
+
+function shouldHighlightRoi(result: ScannerArtifactResult | null): boolean {
+  if (!result) {
+    return true;
+  }
+  if (result.screenState?.readyForArtifactOcr === false) {
+    return true;
+  }
+  return result.screenState?.message.startsWith("Review ROI") === true || result.error?.startsWith("Review ROI") === true;
 }
 
 function browserAssistantSurfaceStyle(collapsed: boolean, detailsOpen: boolean): CSSProperties | undefined {

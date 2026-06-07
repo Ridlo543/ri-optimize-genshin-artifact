@@ -56,6 +56,7 @@ public sealed class ArtifactTextParserTests
     [DataRow("Af", "sands", "atk_")]
     [DataRow("Hf", "sands", "hp_")]
     [DataRow("Df", "circlet", "def_")]
+    [DataRow("D", "goblet", "def_")]
     public void ParseMainStatKey_ReadsShortSlotBoundOcrFallback(string text, string slotKey, string expected)
     {
         ArtifactTextParser.ParseMainStatKey(text, slotKey).Should().Be(expected);

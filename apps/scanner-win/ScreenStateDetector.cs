@@ -10,7 +10,13 @@ internal static class ScreenStateDetector
 
         double bagTitleOrange = Ratio(screenshot, Rect(1308, 120, 494, 57), IsArtifactOrange);
         double bagPanelBeige = Ratio(screenshot, Rect(1308, 120, 494, 962), IsArtifactPanelBeige);
-        if (bagTitleOrange > 0.45 && bagPanelBeige > 0.45)
+        // The bag card stats body is always beige/cream regardless of the artifact's rarity
+        // header color. Blue-themed artifact pieces (e.g. Celestial Gift plume/sands) can have
+        // a non-orange title bar, so bagTitleOrange alone is an unreliable discriminant.
+        // Fall back to beige alone (> 0.40) which is reliable: character panels have near-zero
+        // beige (dark teal/red/purple backgrounds), while bag cards always have a large
+        // cream-colored stats body that drives beige well above 0.40.
+        if ((bagTitleOrange > 0.45 && bagPanelBeige > 0.45) || bagPanelBeige > 0.40)
         {
             return new ScreenStateInfo
             {
@@ -23,13 +29,23 @@ internal static class ScreenStateDetector
 
         double rightRed = Ratio(screenshot, Rect(1420, 95, 470, 720), IsCharacterArtifactRed);
         double centerRed = Ratio(screenshot, Rect(670, 120, 660, 900), IsCharacterArtifactRed);
-        if (rightRed > 0.35 && centerRed > 0.25)
+        double rightGreenText = Ratio(screenshot, Rect(1460, 520, 420, 430), IsCharacterSetBonusGreen);
+        double rightTitleLight = Ratio(screenshot, Rect(1460, 110, 420, 130), IsCharacterTitleLight);
+        if ((rightRed > 0.35 && centerRed > 0.25) ||
+            (rightRed > 0.14 && rightTitleLight > 0.035 && rightGreenText > 0.035) ||
+            // Non-red character panel (any color theme): the right panel header still has
+            // substantial bright white text (name + slot + main stat) even when rightRed is
+            // near zero. Bag card title text is gold/amber and fails the B>130 check, so the
+            // ratio stays low there even though it overlaps the same screen region.
+            // Guard: bag cards reach this point only when their beige is 0.20–0.40 (edge cases).
+            // If bagPanelBeige >= 0.25 here the panel is likely still a bag card; skip.
+            (rightTitleLight > 0.06 && bagPanelBeige < 0.25))
         {
             return new ScreenStateInfo
             {
                 Code = ScreenStateCodes.CharacterArtifactDetail,
                 ReadyForArtifactOcr = true,
-                Confidence = Clamp01((rightRed + centerRed) / 2),
+                Confidence = Clamp01(Math.Max((rightRed + centerRed) / 2, (rightRed + rightTitleLight + rightGreenText) / 3)),
                 Message = "Character artifact detail panel detected."
             };
         }
@@ -121,6 +137,16 @@ internal static class ScreenStateDetector
     private static bool IsCharacterArtifactRed(Color pixel)
     {
         return pixel.R > 100 && pixel.G < 100 && pixel.B < 95;
+    }
+
+    private static bool IsCharacterSetBonusGreen(Color pixel)
+    {
+        return pixel.G > 145 && pixel.R < 180 && pixel.B < 150 && pixel.G > pixel.R * 1.05 && pixel.G > pixel.B * 1.15;
+    }
+
+    private static bool IsCharacterTitleLight(Color pixel)
+    {
+        return pixel.R > 190 && pixel.G > 170 && pixel.B > 130 && Math.Abs(pixel.R - pixel.G) < 70;
     }
 
     private static bool IsPaimonMenuLight(Color pixel)

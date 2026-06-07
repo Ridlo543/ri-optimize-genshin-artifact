@@ -176,7 +176,7 @@ internal static partial class ArtifactTextParser
         {
             return slotKey == "flower" ? "hp" : "hp_";
         }
-        if (IsShortMainStatToken(normalized, 'h') && slotKey is "sands" or "circlet")
+        if (IsShortMainStatToken(normalized, 'h') && slotKey is "sands" or "goblet" or "circlet")
         {
             return "hp_";
         }
@@ -184,7 +184,7 @@ internal static partial class ArtifactTextParser
         {
             return slotKey == "plume" ? "atk" : "atk_";
         }
-        if (IsShortMainStatToken(normalized, 'a') && slotKey is "sands" or "circlet")
+        if (IsShortMainStatToken(normalized, 'a') && slotKey is "sands" or "goblet" or "circlet")
         {
             return "atk_";
         }
@@ -192,7 +192,7 @@ internal static partial class ArtifactTextParser
         {
             return "def_";
         }
-        if (IsShortMainStatToken(normalized, 'd') && slotKey is "sands" or "circlet")
+        if (IsShortMainStatToken(normalized, 'd') && slotKey is "sands" or "goblet" or "circlet")
         {
             return "def_";
         }
@@ -214,6 +214,14 @@ internal static partial class ArtifactTextParser
             {
                 return level;
             }
+        }
+
+        string digitsOnly = Regex.Replace(normalized, @"[^\d]", string.Empty);
+        if (digitsOnly.Length is > 0 and <= 2 &&
+            int.TryParse(digitsOnly, out int bareLevel) &&
+            bareLevel is 0 or >= 10 and <= 20)
+        {
+            return bareLevel;
         }
 
         return null;

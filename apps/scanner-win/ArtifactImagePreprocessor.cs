@@ -71,39 +71,100 @@ internal static class ArtifactImagePreprocessor
 
     private static Bitmap CropDarkPill(Bitmap source)
     {
-        int minX = source.Width;
-        int minY = source.Height;
-        int maxX = -1;
-        int maxY = -1;
-
+        bool[,] darkMask = new bool[source.Width, source.Height];
         for (int y = 0; y < source.Height; y++)
         {
             for (int x = 0; x < source.Width; x++)
             {
                 Color pixel = source.GetPixel(x, y);
-                if (pixel.R < 95 && pixel.G < 95 && pixel.B < 110)
-                {
-                    minX = Math.Min(minX, x);
-                    minY = Math.Min(minY, y);
-                    maxX = Math.Max(maxX, x);
-                    maxY = Math.Max(maxY, y);
-                }
+                darkMask[x, y] = pixel.R < 95 && pixel.G < 95 && pixel.B < 110;
             }
         }
 
-        if (maxX < minX || maxY < minY)
+        Rectangle crop = FindTopLeftDarkComponent(darkMask, source.Width, source.Height);
+        if (crop == Rectangle.Empty)
         {
             return CopyBitmap(source);
         }
 
         const int padding = 4;
-        Rectangle crop = Rectangle.FromLTRB(
-            Math.Max(0, minX - padding),
-            Math.Max(0, minY - padding),
-            Math.Min(source.Width, maxX + padding + 1),
-            Math.Min(source.Height, maxY + padding + 1));
+        crop = Rectangle.FromLTRB(
+            Math.Max(0, crop.Left - padding),
+            Math.Max(0, crop.Top - padding),
+            Math.Min(source.Width, crop.Right + padding),
+            Math.Min(source.Height, crop.Bottom + padding));
 
         return CopyBitmap(source, crop);
+    }
+
+    private static Rectangle FindTopLeftDarkComponent(bool[,] darkMask, int width, int height)
+    {
+        bool[,] visited = new bool[width, height];
+        Rectangle best = Rectangle.Empty;
+        int bestScore = int.MaxValue;
+        int bestArea = -1;
+
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                if (!darkMask[x, y] || visited[x, y])
+                {
+                    continue;
+                }
+
+                Queue<Point> queue = new();
+                queue.Enqueue(new Point(x, y));
+                visited[x, y] = true;
+
+                int minX = x;
+                int minY = y;
+                int maxX = x;
+                int maxY = y;
+                int count = 0;
+
+                while (queue.Count > 0)
+                {
+                    Point point = queue.Dequeue();
+                    count++;
+                    minX = Math.Min(minX, point.X);
+                    minY = Math.Min(minY, point.Y);
+                    maxX = Math.Max(maxX, point.X);
+                    maxY = Math.Max(maxY, point.Y);
+
+                    EnqueueDarkNeighbor(point.X - 1, point.Y);
+                    EnqueueDarkNeighbor(point.X + 1, point.Y);
+                    EnqueueDarkNeighbor(point.X, point.Y - 1);
+                    EnqueueDarkNeighbor(point.X, point.Y + 1);
+                }
+
+                Rectangle component = Rectangle.FromLTRB(minX, minY, maxX + 1, maxY + 1);
+                int score = minY * 10 + minX;
+                if (count > bestArea || (count == bestArea && score < bestScore))
+                {
+                    best = component;
+                    bestScore = score;
+                    bestArea = count;
+                }
+
+                void EnqueueDarkNeighbor(int nextX, int nextY)
+                {
+                    if (nextX < 0 || nextY < 0 || nextX >= width || nextY >= height)
+                    {
+                        return;
+                    }
+                    if (visited[nextX, nextY] || !darkMask[nextX, nextY])
+                    {
+                        return;
+                    }
+
+                    visited[nextX, nextY] = true;
+                    queue.Enqueue(new Point(nextX, nextY));
+                }
+            }
+        }
+
+        return best;
     }
 
     private static Bitmap ThresholdLightText(Bitmap source)

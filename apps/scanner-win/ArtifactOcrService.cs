@@ -88,11 +88,17 @@ internal sealed class ArtifactOcrService(OcrTextReader reader)
             return fallback;
         }
 
+        OcrFieldResult<string> visual = ArtifactVisualClassifier.ReadShortMainStat(source, slotKey, imagePath);
+        if (!string.IsNullOrWhiteSpace(visual.Value))
+        {
+            return visual;
+        }
+
         return new OcrFieldResult<string>
         {
             Field = "mainStatKey",
             Value = null,
-            RawText = string.Join(" | ", new[] { text.RawText, fallbackText.RawText }.Where(value => !string.IsNullOrWhiteSpace(value))),
+            RawText = string.Join(" | ", new[] { text.RawText, fallbackText.RawText, visual.RawText }.Where(value => !string.IsNullOrWhiteSpace(value))),
             Confidence = 0,
             ImagePath = imagePath is null ? null : Path.GetFullPath(imagePath),
             DebugImagePath = fallbackText.DebugImagePath ?? text.DebugImagePath
@@ -121,6 +127,21 @@ internal sealed class ArtifactOcrService(OcrTextReader reader)
         if (parsed.Value >= 0)
         {
             return parsed;
+        }
+
+        OcrFieldResult<string> thresholdWordText = ReadLevelTextField(source, "level-word", PageSegMode.SingleWord, imagePath, writeDebugImage);
+        OcrFieldResult<int> thresholdWord = ParseLevel(thresholdWordText);
+        if (thresholdWord.Value >= 0)
+        {
+            return new OcrFieldResult<int>
+            {
+                Field = "level",
+                Value = thresholdWord.Value,
+                RawText = thresholdWord.RawText,
+                Confidence = thresholdWord.Confidence,
+                ImagePath = thresholdWord.ImagePath,
+                DebugImagePath = thresholdWord.DebugImagePath
+            };
         }
 
         OcrFieldResult<string> fallbackText = ReadTextField(source, "level-fallback", PageSegMode.SingleWord, imagePath, writeDebugImage);
@@ -273,6 +294,7 @@ internal sealed class ArtifactOcrService(OcrTextReader reader)
     private static bool IsShortMainStatOcr(string? rawText)
     {
         string value = rawText is null ? string.Empty : new string(rawText.Where(char.IsLetter).ToArray());
-        return value.Length is > 0 and <= 2;
+        // Include 3-letter abbreviations (ATK, DEF) alongside 1–2-letter ones (HP, A, D).
+        return value.Length is > 0 and <= 3;
     }
 }

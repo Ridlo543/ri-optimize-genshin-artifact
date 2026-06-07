@@ -89,6 +89,15 @@ select:hover {
   border-color: rgba(225, 182, 94, 0.7);
 }
 
+.roi-action--attention,
+.assistant-actions__roi--attention {
+  border-color: rgba(255, 190, 92, 0.96);
+  box-shadow:
+    0 0 0 1px rgba(255, 190, 92, 0.38),
+    0 0 14px rgba(255, 190, 92, 0.25);
+  color: #f0cf87;
+}
+
 button:disabled {
   cursor: progress;
   opacity: 0.72;

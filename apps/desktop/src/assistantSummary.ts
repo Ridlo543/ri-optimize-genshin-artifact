@@ -57,7 +57,7 @@ export function buildAssistantSummary(result: ScannerArtifactResult | null, prof
     const readyButIncomplete = result.screenState?.readyForArtifactOcr === true;
     return {
       state: result.screenState?.readyForArtifactOcr === false || readyButIncomplete ? "review" : "waiting",
-      title: result.screenState?.message.startsWith("Review ROI") ? "Review ROI" : readyButIncomplete ? "Review OCR" : "Waiting",
+      title: result.screenState?.message.startsWith("Review ROI") ? "Adjust ROI" : readyButIncomplete ? "Review OCR" : "Waiting",
       detail: trust.blockingReasons.join(" ") || result.error || result.screenState?.message || "No artifact data yet.",
       confidence,
       metrics: [],

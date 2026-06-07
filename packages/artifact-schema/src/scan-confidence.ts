@@ -34,12 +34,12 @@ export function assessScannerResultTrust(result: ScannerArtifactResult): ScanTru
   }
 
   if (result.error) {
-    blockingReasons.push(result.error);
+    blockingReasons.push(formatScannerError(result.error));
   }
 
   if (!result.artifact) {
     if (result.artifactDraft && result.missingFields && result.missingFields.length > 0) {
-      blockingReasons.push(`Scanner artifact draft is missing ${result.missingFields.join(", ")}.`);
+      blockingReasons.push(`Review ${formatFieldList(result.missingFields)} before evaluating.`);
     } else {
       blockingReasons.push("Scanner did not return artifact data.");
     }
@@ -61,7 +61,7 @@ export function assessScannerResultTrust(result: ScannerArtifactResult): ScanTru
     }
     const value = result.confidence[field];
     if (typeof value === "number" && value < threshold) {
-      blockingReasons.push(`Scanner confidence for ${field} is too low (${formatPercent(value)}).`);
+      blockingReasons.push(`Review ${friendlyFieldName(field)} before evaluating.`);
     }
   }
 
@@ -90,6 +90,28 @@ function formatConfidenceWarning(field: keyof ScanConfidence, value: number): st
     return `Optional ${field} reading confidence is ${formatPercent(value)}.`;
   }
   return `Review ${friendlyFieldName(field)}: OCR confidence ${formatPercent(value)}.`;
+}
+
+function formatScannerError(error: string): string {
+  const missingMatch = error.match(/(?:Region|Screenshot) OCR missing required fields: (?<fields>[^.]+)\./);
+  if (missingMatch?.groups?.fields) {
+    return `Review ${formatFieldList(missingMatch.groups.fields.split(",").map((field) => field.trim()))} before evaluating.`;
+  }
+
+  if (error.startsWith("Review ROI")) {
+    return "Adjust the ROI so the red box covers the artifact detail panel.";
+  }
+
+  return error;
+}
+
+function formatFieldList(fields: string[]): string {
+  const names = fields.map((field) => friendlyFieldName(field as keyof ScanConfidence));
+  if (names.length <= 1) {
+    return names[0] ?? "OCR";
+  }
+
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 }
 
 function friendlyFieldName(field: keyof ScanConfidence): string {

@@ -88,12 +88,73 @@ public sealed class ScreenshotArtifactParserTests
             .Which.Should().BeEquivalentTo(new GoodSubstat { Key = "critDMG_", Value = 5.4m });
     }
 
+    [TestMethod]
+    public void ParseFile_TealCharacterPanelYY0600CANuDetectsCharacterArtifactDetail()
+    {
+        using OcrTextReader reader = new();
+        ArtifactOcrService service = new(reader);
+        ScreenshotArtifactParser parser = new(service);
+
+        ScanResult result = parser.ParseFile(GetRepoFilePath("data", "log-manual", "bug_new_2", "GenshinImpact_yY0600CANu.png"));
+
+        result.ScreenState.Should().NotBeNull();
+        result.ScreenState!.Code.Should().Be(ScreenStateCodes.CharacterArtifactDetail);
+        result.ScreenState.ReadyForArtifactOcr.Should().BeTrue();
+        result.Artifact.Should().NotBeNull();
+        GoodArtifact artifact = result.Artifact!;
+        artifact.SlotKey.Should().Be("goblet");
+        artifact.MainStatKey.Should().Be("atk_");
+        artifact.Level.Should().Be(20);
+        artifact.Location.Should().Be("Prune");
+    }
+
+    [TestMethod]
+    public void ParseFile_TealCharacterPanelG2ZhtL0vyoDetectsCharacterArtifactDetail()
+    {
+        using OcrTextReader reader = new();
+        ArtifactOcrService service = new(reader);
+        ScreenshotArtifactParser parser = new(service);
+
+        ScanResult result = parser.ParseFile(GetRepoFilePath("data", "log-manual", "bug_new_2", "GenshinImpact_G2ZhtL0vyo.png"));
+
+        result.ScreenState.Should().NotBeNull();
+        result.ScreenState!.Code.Should().Be(ScreenStateCodes.CharacterArtifactDetail);
+        result.ScreenState.ReadyForArtifactOcr.Should().BeTrue();
+    }
+
+    [TestMethod]
+    public void ParseFile_ManualCharacterLongTitleGobletDoesNotNeedManualCorrection()
+    {
+        using OcrTextReader reader = new();
+        ArtifactOcrService service = new(reader);
+        ScreenshotArtifactParser parser = new(service);
+
+        ScanResult result = parser.ParseFile(GetRepoFilePath("data", "log-manual", "bug_new_1", "GenshinImpact_elLulJBWJW.png"));
+
+        result.Error.Should().BeNull();
+        result.Capture.Layout.Should().Be("equipped-character-panel-merged");
+        result.Artifact.Should().NotBeNull();
+        GoodArtifact artifact = result.Artifact!;
+        artifact.SlotKey.Should().Be("goblet");
+        artifact.MainStatKey.Should().Be("def_");
+        artifact.Level.Should().Be(20);
+        artifact.Location.Should().Be("Linnea");
+        artifact.Substats.Should().ContainEquivalentOf(new GoodSubstat { Key = "atk_", Value = 11.1m });
+        artifact.Substats.Should().ContainEquivalentOf(new GoodSubstat { Key = "enerRech_", Value = 5.2m });
+        artifact.Substats.Should().ContainEquivalentOf(new GoodSubstat { Key = "critDMG_", Value = 25.7m });
+    }
+
     private static string GetScreenshotPath(string fileName)
+    {
+        return GetRepoFilePath("data", "fixtures", "screenshots", fileName);
+    }
+
+    private static string GetRepoFilePath(params string[] relativeParts)
     {
         DirectoryInfo? directory = new(AppContext.BaseDirectory);
         while (directory is not null)
         {
-            string candidate = Path.Combine(directory.FullName, "data", "fixtures", "screenshots", fileName);
+            string candidate = Path.Combine(new[] { directory.FullName }.Concat(relativeParts).ToArray());
             if (File.Exists(candidate))
             {
                 return candidate;
@@ -102,6 +163,6 @@ public sealed class ScreenshotArtifactParserTests
             directory = directory.Parent;
         }
 
-        throw new FileNotFoundException($"Could not find screenshot fixture: {fileName}");
+        throw new FileNotFoundException($"Could not find repo file: {Path.Combine(relativeParts)}");
     }
 }

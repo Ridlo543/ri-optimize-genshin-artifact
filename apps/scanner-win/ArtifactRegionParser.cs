@@ -11,7 +11,10 @@ internal sealed class ArtifactRegionParser(ArtifactOcrService ocrService)
             Name: RectFromPanel(0, 0, 494, 57, 494, 962),
             Slot: RectFromPanel(31, 57, 234, 77, 494, 962),
             MainStat: RectFromPanel(31, 151, 225, 32, 494, 962),
-            Level: RectFromPanel(31, 312, 69, 33, 494, 962),
+            // ROI captures often include a little extra padding around the artifact panel.
+            // Make the level crop more forgiving vertically and horizontally, then let
+            // PreprocessLevel isolate the dark pill before OCR.
+            Level: RectFromPanel(20, 296, 160, 66, 494, 962),
             Lock: RectFromPanel(369, 303, 47, 47, 494, 962),
             Substats: RectFromPanel(31, 350, 409, 220, 494, 962),
             Equipped: RectFromPanel(31, 904, 420, 55, 494, 962)));
@@ -236,7 +239,24 @@ internal sealed class ArtifactRegionParser(ArtifactOcrService ocrService)
     {
         double red = Ratio(panel, IsCharacterArtifactRed);
         double beige = Ratio(panel, IsBagArtifactBeige);
-        if (red > 0.28 && beige < 0.25)
+        double characterGreen = Ratio(panel, IsCharacterSetBonusGreen);
+        double characterGold = Ratio(panel, IsCharacterArtifactGold);
+        double titleLight = Ratio(panel, IsCharacterTitleLight);
+
+        // Standard character panel: dominated by red or has gold+green+title light on a dark background.
+        if ((red > 0.28 && beige < 0.35) ||
+            (beige < 0.35 && characterGold > 0.12 && characterGreen > 0.035 && titleLight > 0.025))
+        {
+            return CharacterPanelProfile;
+        }
+
+        // Non-red character panel (any color theme): has visible bright white title/stat text
+        // on a background that is not dominated by beige. Bag cards always have beige > 0.40
+        // from the large cream stats body. Character panels — including teal panels and the
+        // "Artifact Recommendations" sub-screen where warm artifact art pushes beige to ~0.25–0.30
+        // — stay reliably below 0.35. Using 0.35 instead of 0.25 catches those panels without
+        // risking bag card false positives.
+        if (beige < 0.35 && titleLight > 0.015)
         {
             return CharacterPanelProfile;
         }
@@ -325,7 +345,7 @@ internal sealed class ArtifactRegionParser(ArtifactOcrService ocrService)
         OcrFieldResult<string> mainStat = ocrService.ReadMainStatKey(crops.MainStat, slot.Value, writeDebugImage: writeDebugImage);
         OcrFieldResult<int> level = ocrService.ReadLevel(crops.Level, writeDebugImage: writeDebugImage);
         OcrSubstatsResult substats = ocrService.ReadSubstats(crops.Substats, writeDebugImage: writeDebugImage);
-        level = PreferLeadingLevelFromSubstats(level, substats);
+        level = PreferLeadingLevelFromSubstats(level, substats, profile.Name.StartsWith("roi-character-panel", StringComparison.Ordinal));
 
         return new FieldReadResult(
             ProfileName: profile.Name,
@@ -340,23 +360,42 @@ internal sealed class ArtifactRegionParser(ArtifactOcrService ocrService)
             Rectangles: crops.Rectangles);
     }
 
-    private static OcrFieldResult<int> PreferLeadingLevelFromSubstats(OcrFieldResult<int> level, OcrSubstatsResult substats)
+    private static OcrFieldResult<int> PreferLeadingLevelFromSubstats(OcrFieldResult<int> level, OcrSubstatsResult substats, bool inferZeroFromUnactivated)
     {
         int? parsed = ArtifactTextParser.ParseLeadingLevel(substats.RawText);
-        if (!parsed.HasValue || level.Confidence >= 0.55)
+
+        if (parsed.HasValue)
         {
-            return level;
+            // Use the substats-derived level when the direct crop is uncertain OR when
+            // the direct crop read 0 but the level badge (now included in substats crop)
+            // says the level is non-zero — the typical misread is "+20" → "+0".
+            bool directUncertain = level.Confidence < 0.55;
+            bool likelyMisread = parsed.Value > 0 && level.Value == 0;
+            if (directUncertain || likelyMisread)
+            {
+                return new OcrFieldResult<int>
+                {
+                    Field = "level",
+                    Value = parsed.Value,
+                    RawText = string.IsNullOrWhiteSpace(level.RawText) ? substats.RawText.Split('\n').FirstOrDefault() : level.RawText,
+                    Confidence = Math.Max(level.Confidence, 0.72),
+                    ImagePath = level.ImagePath,
+                    DebugImagePath = level.DebugImagePath
+                };
+            }
         }
 
-        return new OcrFieldResult<int>
-        {
-            Field = "level",
-            Value = parsed.Value,
-            RawText = string.IsNullOrWhiteSpace(level.RawText) ? substats.RawText.Split('\n').FirstOrDefault() : level.RawText,
-            Confidence = Math.Max(level.Confidence, 0.72),
-            ImagePath = level.ImagePath,
-            DebugImagePath = level.DebugImagePath
-        };
+        return inferZeroFromUnactivated && level.Value < 0 && substats.UnactivatedSubstats.Count > 0
+            ? new OcrFieldResult<int>
+            {
+                Field = "level",
+                Value = 0,
+                RawText = string.IsNullOrWhiteSpace(level.RawText) ? "unactivated-substat" : level.RawText,
+                Confidence = Math.Max(level.Confidence, 0.62),
+                ImagePath = level.ImagePath,
+                DebugImagePath = level.DebugImagePath
+            }
+            : level;
     }
 
     private static OcrFieldResult<string> InferFixedMainStat(OcrFieldResult<string> slot, OcrFieldResult<string> mainStat)
@@ -553,6 +592,21 @@ internal sealed class ArtifactRegionParser(ArtifactOcrService ocrService)
     private static bool IsCharacterArtifactRed(Color pixel)
     {
         return pixel.R > 100 && pixel.G < 100 && pixel.B < 95;
+    }
+
+    private static bool IsCharacterSetBonusGreen(Color pixel)
+    {
+        return pixel.G > 145 && pixel.R < 180 && pixel.B < 150 && pixel.G > pixel.R * 1.05 && pixel.G > pixel.B * 1.15;
+    }
+
+    private static bool IsCharacterArtifactGold(Color pixel)
+    {
+        return pixel.R > 180 && pixel.G > 140 && pixel.B < 95;
+    }
+
+    private static bool IsCharacterTitleLight(Color pixel)
+    {
+        return pixel.R > 190 && pixel.G > 170 && pixel.B > 130 && Math.Abs(pixel.R - pixel.G) < 70;
     }
 
     private static bool IsBagArtifactBeige(Color pixel)

@@ -1,5 +1,5 @@
 import { CSSProperties, KeyboardEvent, PointerEvent, useRef } from "react";
-import { Eye, Gem, GripVertical, List, Maximize2, Minus, Power, RotateCcw, ScanLine, SlidersHorizontal, Square } from "lucide-react";
+import { Eye, Gem, GripVertical, Info, Maximize2, Minus, Power, RotateCcw, ScanLine, SlidersHorizontal, Square } from "lucide-react";
 import { AssistantSummary } from "./assistantSummary";
 import { InfoTooltip } from "./InfoTooltip";
 import {
@@ -33,6 +33,7 @@ export interface AssistantBubbleSurfaceProps {
   detailsOpen: boolean;
   error?: string;
   hash?: string;
+  roiAttention?: boolean;
   style?: CSSProperties | undefined;
   levelCorrection?: AssistantLevelCorrection | undefined;
   onToggleCollapsed: () => void;
@@ -54,6 +55,7 @@ export function AssistantBubbleSurface({
   detailsOpen,
   error,
   hash,
+  roiAttention = false,
   style,
   levelCorrection,
   onToggleCollapsed,
@@ -170,11 +172,11 @@ export function AssistantBubbleSurface({
         <button className="icon-button" title={watching ? "Stop Watch" : "Watch"} {...buttonAction(onToggleWatch)}>
           {watching ? <Square size={15} /> : <Eye size={15} />}
         </button>
-        <button className="icon-button" title="Edit ROI" {...buttonAction(onEditRoi)}>
+        <button className={`icon-button ${roiAttention ? "assistant-actions__roi--attention" : ""}`} title="Edit ROI" aria-label="Edit ROI" {...buttonAction(onEditRoi)}>
           <SlidersHorizontal size={15} />
         </button>
-        <button className="icon-button" title="Details" {...buttonAction(onToggleDetails)}>
-          <List size={15} />
+        <button className="icon-button" title={detailsOpen ? "Hide info" : "Show info"} aria-label={detailsOpen ? "Hide info" : "Show info"} aria-expanded={detailsOpen} {...buttonAction(onToggleDetails)}>
+          <Info size={15} />
         </button>
         {onOpenPanel ? (
           <button className="icon-button" title="Open Panel" {...buttonAction(onOpenPanel)}>

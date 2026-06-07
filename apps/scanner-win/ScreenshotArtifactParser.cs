@@ -29,6 +29,18 @@ internal sealed class ScreenshotArtifactParser(ArtifactOcrService ocrService)
             Substats: RectFromScreen(1463, 348, 455, 180),
             Equipped: RectFromScreen(1463, 1030, 420, 60)));
 
+    private static readonly ScreenshotLayoutProfile EquippedCharacterLongTitleProfile = new(
+        "equipped-character-panel-long-title",
+        null,
+        new ScreenshotFieldRectangles(
+            Name: RectFromScreen(1463, 119, 420, 96),
+            Slot: RectFromScreen(1463, 218, 360, 42),
+            MainStat: RectFromScreen(1463, 250, 260, 42),
+            Level: RectFromScreen(1463, 328, 120, 58),
+            Lock: RectFromScreen(1784, 169, 47, 47),
+            Substats: RectFromScreen(1463, 376, 455, 224),
+            Equipped: RectFromScreen(1463, 1030, 420, 60)));
+
     private readonly ArtifactOcrService ocrService = ocrService ?? throw new ArgumentNullException(nameof(ocrService));
 
     public ScanResult ParseFile(string screenshotPath, bool writeDebugImage = false)
@@ -60,23 +72,28 @@ internal sealed class ScreenshotArtifactParser(ArtifactOcrService ocrService)
         ScreenshotLayoutProfile profile = screenState.Code == ScreenStateCodes.ArtifactBagDetail
             ? BagInventoryProfile
             : EquippedCharacterProfile;
-        using FieldCrops crops = CropFields(screenshot, profile);
+        FieldReadResult fields = ReadFields(screenshot, profile, writeDebugImage);
+        if (profile == EquippedCharacterProfile)
+        {
+            FieldReadResult alternateFields = ReadFields(screenshot, EquippedCharacterLongTitleProfile, writeDebugImage);
+            fields = MergeCharacterFields(fields, alternateFields);
+        }
 
-        string? panelImagePath = writeDebugImage && crops.Panel is not null
-            ? SaveDebugCrop(crops.Panel, "artifact-panel")
+        string? panelImagePath = writeDebugImage && fields.Panel is not null
+            ? SaveDebugCrop(fields.Panel, "artifact-panel")
             : null;
+        fields.Panel?.Dispose();
 
-        OcrFieldResult<string> slot = ocrService.ReadSlotKey(crops.Slot, writeDebugImage: writeDebugImage);
-        OcrFieldResult<string> mainStat = ocrService.ReadMainStatKey(crops.MainStat, slot.Value, writeDebugImage: writeDebugImage);
-        OcrFieldResult<int> level = ocrService.ReadLevel(crops.Level, writeDebugImage: writeDebugImage);
-        OcrFieldResult<string> itemNameSetKey = ocrService.ReadSetKey(crops.Name, writeDebugImage: writeDebugImage);
-        OcrFieldResult<bool> locked = ArtifactVisualClassifier.ReadLock(crops.Lock);
-        OcrFieldResult<string> location = ocrService.ReadLocation(crops.Equipped, writeDebugImage: writeDebugImage);
-        OcrSubstatsResult substats = ocrService.ReadSubstats(crops.Substats, writeDebugImage: writeDebugImage);
-        ArtifactSetResolution setResolution = ArtifactSetResolver.Resolve(itemNameSetKey, substats);
+        OcrFieldResult<string> slot = fields.Slot;
+        OcrFieldResult<string> mainStat = fields.MainStat;
+        OcrFieldResult<int> level = fields.Level;
+        OcrFieldResult<bool> locked = fields.Locked;
+        OcrFieldResult<string> location = fields.Location;
+        OcrSubstatsResult substats = fields.Substats;
+        ArtifactSetResolution setResolution = ArtifactSetResolver.Resolve(fields.ItemNameSetKey, substats);
         OcrFieldResult<string> setKey = setResolution.Field;
 
-        int rarity = ArtifactVisualClassifier.EstimateRarity(crops.Name);
+        int rarity = fields.Rarity;
         double substatsConfidence = rarity == 2 && level.Value == 0 && substats.Substats.Count == 0
             ? 0.9
             : substats.Confidence;
@@ -121,7 +138,7 @@ internal sealed class ScreenshotArtifactParser(ArtifactOcrService ocrService)
             {
                 Resolution = $"{screenshot.Width}x{screenshot.Height}",
                 CapturedAt = DateTimeOffset.UtcNow.ToString("O"),
-                Layout = profile.Name,
+                Layout = fields.ProfileName,
                 ScreenshotImagePath = screenshotPath,
                 ArtifactPanelImagePath = panelImagePath,
                 ScreenshotHash = screenshotHash
@@ -130,7 +147,7 @@ internal sealed class ScreenshotArtifactParser(ArtifactOcrService ocrService)
             {
                 ScreenshotPath = screenshotPath,
                 RawText = BuildRawText(setKey, slot, mainStat, level, location, substats),
-                CropRectangles = crops.Rectangles,
+                CropRectangles = fields.Rectangles,
                 SetIdentity = setResolution.Diagnostics
             },
             Error = missingFields.Count == 0 ? null : $"Screenshot OCR missing required fields: {string.Join(", ", missingFields)}."
@@ -265,6 +282,134 @@ internal sealed class ScreenshotArtifactParser(ArtifactOcrService ocrService)
             });
     }
 
+    private FieldReadResult ReadFields(Bitmap screenshot, ScreenshotLayoutProfile profile, bool writeDebugImage)
+    {
+        using FieldCrops crops = CropFields(screenshot, profile);
+        OcrFieldResult<string> slot = ocrService.ReadSlotKey(crops.Slot, writeDebugImage: writeDebugImage);
+        OcrFieldResult<string> mainStat = ocrService.ReadMainStatKey(crops.MainStat, slot.Value, writeDebugImage: writeDebugImage);
+        OcrFieldResult<int> level = ocrService.ReadLevel(crops.Level, writeDebugImage: writeDebugImage);
+        OcrSubstatsResult substats = ocrService.ReadSubstats(crops.Substats, writeDebugImage: writeDebugImage);
+        level = PreferLeadingLevelFromSubstats(level, substats, profile.Name.StartsWith("equipped-character-panel", StringComparison.Ordinal));
+
+        return new FieldReadResult(
+            ProfileName: profile.Name,
+            Panel: crops.Panel is null ? null : new Bitmap(crops.Panel),
+            ItemNameSetKey: ocrService.ReadSetKey(crops.Name, writeDebugImage: writeDebugImage),
+            Slot: slot,
+            MainStat: mainStat,
+            Level: level,
+            Locked: ArtifactVisualClassifier.ReadLock(crops.Lock),
+            Location: ocrService.ReadLocation(crops.Equipped, writeDebugImage: writeDebugImage),
+            Substats: substats,
+            Rarity: ArtifactVisualClassifier.EstimateRarity(crops.Name),
+            Rectangles: crops.Rectangles);
+    }
+
+    private static OcrFieldResult<int> PreferLeadingLevelFromSubstats(OcrFieldResult<int> level, OcrSubstatsResult substats, bool inferZeroFromUnactivated)
+    {
+        int? parsed = ArtifactTextParser.ParseLeadingLevel(substats.RawText);
+        if (!parsed.HasValue || level.Confidence >= 0.55)
+        {
+            return inferZeroFromUnactivated && level.Value < 0 && substats.UnactivatedSubstats.Count > 0
+                ? new OcrFieldResult<int>
+                {
+                    Field = "level",
+                    Value = 0,
+                    RawText = string.IsNullOrWhiteSpace(level.RawText) ? "unactivated-substat" : level.RawText,
+                    Confidence = Math.Max(level.Confidence, 0.62),
+                    ImagePath = level.ImagePath,
+                    DebugImagePath = level.DebugImagePath
+                }
+                : level;
+        }
+
+        return new OcrFieldResult<int>
+        {
+            Field = "level",
+            Value = parsed.Value,
+            RawText = string.IsNullOrWhiteSpace(level.RawText) ? substats.RawText.Split('\n').FirstOrDefault() : level.RawText,
+            Confidence = Math.Max(level.Confidence, 0.72),
+            ImagePath = level.ImagePath,
+            DebugImagePath = level.DebugImagePath
+        };
+    }
+
+    private static FieldReadResult MergeCharacterFields(FieldReadResult primary, FieldReadResult alternate)
+    {
+        OcrFieldResult<string> itemNameSetKey = PreferTextField(primary.ItemNameSetKey, alternate.ItemNameSetKey);
+        OcrFieldResult<string> slot = PreferTextField(primary.Slot, alternate.Slot);
+        OcrFieldResult<string> mainStat = PreferTextField(primary.MainStat, alternate.MainStat);
+        OcrFieldResult<int> level = PreferLevelField(primary.Level, alternate.Level);
+        OcrSubstatsResult substats = alternate.Substats.Substats.Count > primary.Substats.Substats.Count ? alternate.Substats : primary.Substats;
+        bool usedAlternate =
+            !ReferenceEquals(itemNameSetKey, primary.ItemNameSetKey) ||
+            !ReferenceEquals(slot, primary.Slot) ||
+            !ReferenceEquals(mainStat, primary.MainStat) ||
+            !ReferenceEquals(level, primary.Level) ||
+            !ReferenceEquals(substats, primary.Substats);
+        if (!usedAlternate)
+        {
+            alternate.Panel?.Dispose();
+            return primary;
+        }
+
+        primary.Panel?.Dispose();
+        Dictionary<string, string> rectangles = new(primary.Rectangles)
+        {
+            ["layout"] = "equipped-character-panel-merged",
+            ["alternateLayout"] = alternate.ProfileName,
+            ["alternateSlot"] = alternate.Rectangles["slot"],
+            ["alternateMainStat"] = alternate.Rectangles["mainStat"],
+            ["alternateLevel"] = alternate.Rectangles["level"]
+        };
+
+        return primary with
+        {
+            ProfileName = "equipped-character-panel-merged",
+            Panel = alternate.Panel,
+            ItemNameSetKey = itemNameSetKey,
+            Slot = slot,
+            MainStat = mainStat,
+            Level = level,
+            Substats = substats,
+            Rectangles = rectangles
+        };
+    }
+
+    private static OcrFieldResult<string> PreferTextField(OcrFieldResult<string> primary, OcrFieldResult<string> alternate)
+    {
+        if (string.IsNullOrWhiteSpace(primary.Value) && !string.IsNullOrWhiteSpace(alternate.Value))
+        {
+            return alternate;
+        }
+        if (string.IsNullOrWhiteSpace(primary.Value) &&
+            string.IsNullOrWhiteSpace(alternate.Value) &&
+            !string.IsNullOrWhiteSpace(alternate.RawText))
+        {
+            return alternate;
+        }
+        if (!string.IsNullOrWhiteSpace(alternate.Value) && alternate.Confidence > primary.Confidence + 0.2)
+        {
+            return alternate;
+        }
+
+        return primary;
+    }
+
+    private static OcrFieldResult<int> PreferLevelField(OcrFieldResult<int> primary, OcrFieldResult<int> alternate)
+    {
+        if (primary.Value < 0 && alternate.Value >= 0)
+        {
+            return alternate;
+        }
+        if (alternate.Value >= 0 && alternate.Confidence > primary.Confidence + 0.2)
+        {
+            return alternate;
+        }
+
+        return primary;
+    }
+
     private static List<string> FindMissingFields(
         OcrFieldResult<string> slot,
         OcrFieldResult<string> mainStat,
@@ -388,4 +533,17 @@ internal sealed class ScreenshotArtifactParser(ArtifactOcrService ocrService)
             Equipped.Dispose();
         }
     }
+
+    private sealed record FieldReadResult(
+        string ProfileName,
+        Bitmap? Panel,
+        OcrFieldResult<string> ItemNameSetKey,
+        OcrFieldResult<string> Slot,
+        OcrFieldResult<string> MainStat,
+        OcrFieldResult<int> Level,
+        OcrFieldResult<bool> Locked,
+        OcrFieldResult<string> Location,
+        OcrSubstatsResult Substats,
+        int Rarity,
+        Dictionary<string, string> Rectangles);
 }
