@@ -9,7 +9,7 @@ export const IDLE_SCAN_RESULT: ScannerArtifactResult = {
     code: "game-not-found",
     readyForArtifactOcr: false,
     confidence: 0,
-    message: "No analysis has run yet. Open Genshin, set the ROI, then click Analyze."
+    message: "No analysis has run yet. Open Genshin, set the scan area, then click Analyze."
   },
   capture: {
     resolution: "unknown",

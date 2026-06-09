@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_REGION } from "./roi";
-import { assistantWindowRect, scannerStatusRect } from "./nativeWindows";
+import { assistantWindowRect, assistantWindowRectFromCurrentWindow, scannerStatusRect } from "./nativeWindows";
 
 describe("native physical window rectangles", () => {
   it("maps scanner client bounds to integer physical pixels", () => {
@@ -91,6 +91,15 @@ describe("native physical window rectangles", () => {
     ).toMatchObject({
       width: 320,
       height: 200
+    });
+  });
+
+  it("can expand from its current native position before scanner status is available", () => {
+    expect(assistantWindowRectFromCurrentWindow({ x: 48, y: 108 }, false, false)).toEqual({
+      x: 48,
+      y: 108,
+      width: 360,
+      height: 285
     });
   });
 

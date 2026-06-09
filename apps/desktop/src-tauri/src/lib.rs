@@ -1,10 +1,10 @@
 use serde::{Deserialize, Serialize};
+use std::fs::OpenOptions;
+use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Command, Output, Stdio};
 use std::time::{Duration, Instant};
-use tauri::{Emitter, Manager, PhysicalPosition, PhysicalSize, WindowEvent};
-use tauri_plugin_shell::process::CommandEvent;
-use tauri_plugin_shell::ShellExt;
+use tauri::{path::BaseDirectory, Emitter, Manager, PhysicalPosition, PhysicalSize, WindowEvent};
 
 const SCANNER_COMMAND_TIMEOUT: Duration = Duration::from_secs(45);
 const SCANNER_POLL_INTERVAL: Duration = Duration::from_millis(50);
@@ -135,6 +135,21 @@ async fn show_fixture_playground(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+async fn debug_record_event(event: String) -> Result<(), String> {
+    if std::env::var("RI_GENSHIN_SMOKE").ok().as_deref() != Some("1") {
+        return Ok(());
+    }
+
+    let log_path = smoke_event_log_path()?;
+    let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)
+        .map_err(|error| format!("Unable to open smoke event log {}: {error}", log_path.display()))?;
+    writeln!(file, "{event}").map_err(|error| format!("Unable to write smoke event log: {error}"))
+}
+
+#[tauri::command]
 async fn scanner_scan_visible_artifact(app: tauri::AppHandle) -> Result<String, String> {
     run_scanner(&app, &["scan-visible-artifact"]).await
 }
@@ -167,7 +182,7 @@ async fn scanner_classify_region_artifact(
     app: tauri::AppHandle,
     region_json: String,
 ) -> Result<String, String> {
-    run_scanner(
+    run_scanner_with_assistant_hidden(
         &app,
         &[
             "classify-region-artifact",
@@ -279,27 +294,22 @@ async fn scanner_classify_screenshot_fixture(
     .await
 }
 
+#[tauri::command]
+async fn scanner_detect_artifact_region(app: tauri::AppHandle) -> Result<String, String> {
+    run_scanner_with_assistant_hidden(&app, &["detect-artifact-region"]).await
+}
+
 async fn run_scanner(app: &tauri::AppHandle, args: &[&str]) -> Result<String, String> {
     if let Ok(path) = std::env::var("GENSHIN_SCANNER_PATH") {
         return run_executable(PathBuf::from(path), args);
     }
 
+    if let Some(path) = resolve_bundled_scanner_executable(app) {
+        return run_executable(path, args);
+    }
+
+    #[cfg(debug_assertions)]
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    #[cfg(debug_assertions)]
-    let project = manifest_dir
-        .join("..")
-        .join("..")
-        .join("scanner-win")
-        .join("GenshinArtifactScanner.Win.csproj");
-
-    #[cfg(debug_assertions)]
-    if project.exists() {
-        return run_dotnet_project(project, args);
-    }
-
-    if let Some(result) = run_bundled_sidecar(app, args).await {
-        return result;
-    }
 
     #[cfg(debug_assertions)]
     let debug_exe = manifest_dir
@@ -315,6 +325,13 @@ async fn run_scanner(app: &tauri::AppHandle, args: &[&str]) -> Result<String, St
     if debug_exe.exists() {
         return run_executable(debug_exe, args);
     }
+
+    #[cfg(debug_assertions)]
+    let project = manifest_dir
+        .join("..")
+        .join("..")
+        .join("scanner-win")
+        .join("GenshinArtifactScanner.Win.csproj");
 
     #[cfg(debug_assertions)]
     if project.exists() {
@@ -376,67 +393,29 @@ fn restore_capture_occluders(windows: Vec<tauri::WebviewWindow>) -> Result<(), S
     Ok(())
 }
 
-async fn run_bundled_sidecar(
-    app: &tauri::AppHandle,
-    args: &[&str],
-) -> Option<Result<String, String>> {
-    let mut command = match app.shell().sidecar("GenshinArtifactScanner.Win") {
-        Ok(command) => command,
-        Err(_) => return None,
-    };
-
-    for arg in args {
-        command = command.arg(*arg);
-    }
-
-    Some(run_plugin_shell_command_with_timeout(command).await)
-}
-
-async fn run_plugin_shell_command_with_timeout(
-    command: tauri_plugin_shell::process::Command,
-) -> Result<String, String> {
-    let (mut rx, child) = command
-        .spawn()
-        .map_err(|error| format!("Unable to run bundled scanner sidecar: {error}"))?;
-    let timeout = tokio::time::sleep(SCANNER_COMMAND_TIMEOUT);
-    tokio::pin!(timeout);
-    let mut stdout = Vec::new();
-    let mut stderr = Vec::new();
-
-    loop {
-        tokio::select! {
-            event = rx.recv() => {
-                match event {
-                    Some(CommandEvent::Stdout(line)) => {
-                        stdout.extend(line);
-                        stdout.push(b'\n');
-                    }
-                    Some(CommandEvent::Stderr(line)) => {
-                        stderr.extend(line);
-                        stderr.push(b'\n');
-                    }
-                    Some(CommandEvent::Error(error)) => return Err(format!("Scanner sidecar failed: {error}")),
-                    Some(CommandEvent::Terminated(payload)) => {
-                        return command_output_parts(payload.code == Some(0), &stdout, &stderr);
-                    }
-                    Some(_) => {}
-                    None => return Err("Scanner sidecar exited without a termination status.".to_string()),
-                }
-            }
-            _ = &mut timeout => {
-                let _ = child.kill();
-                return Err(format!(
-                    "Scanner sidecar timed out after {} seconds.",
-                    SCANNER_COMMAND_TIMEOUT.as_secs()
-                ));
-            }
-        }
-    }
+fn resolve_bundled_scanner_executable(app: &tauri::AppHandle) -> Option<PathBuf> {
+    app.path()
+        .resolve(
+            "binaries/scanner-publish/GenshinArtifactScanner.Win.exe",
+            BaseDirectory::Resource,
+        )
+        .ok()
+        .filter(|path| path.exists())
 }
 
 fn run_executable(path: PathBuf, args: &[&str]) -> Result<String, String> {
-    let mut command = Command::new(path);
+    let working_dir = path.parent().map(PathBuf::from);
+    let mut command = Command::new(&path);
     command.args(args);
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+    if let Some(parent) = working_dir {
+        command.current_dir(parent);
+    }
 
     command_output(run_command_with_timeout(command, "scanner sidecar")?)
 }
@@ -512,15 +491,48 @@ fn set_window_bounds(
         .map_err(|error| error.to_string())
 }
 
-fn reset_assistant_runtime_storage(window: &tauri::WebviewWindow) {
-    let _ = window.eval(
+fn reset_assistant_runtime_storage(window: &tauri::WebviewWindow, deterministic_layout: bool) {
+    let placement = if deterministic_layout {
+        r#"localStorage.setItem('ri-genshin.assistant.placement.v1', JSON.stringify({ x: 0.02, y: 0.06, unit: 'normalized-client' }));"#
+    } else {
+        r#"localStorage.removeItem('ri-genshin.assistant.placement.v1');"#
+    };
+
+    let script = format!(
         r#"
         localStorage.setItem('ri-genshin.assistant.watch.enabled.v1', 'false');
         localStorage.setItem('ri-genshin.assistant.scanning.v1', 'false');
-        window.dispatchEvent(new CustomEvent('ri-genshin-watch-state', { detail: false }));
-        window.dispatchEvent(new CustomEvent('ri-genshin-scanning-state', { detail: false }));
-        "#,
+        localStorage.setItem('ri-genshin.roi.editing', 'false');
+        localStorage.removeItem('ri-genshin.scanner.latestResult');
+        localStorage.removeItem('ri-genshin.scanner.latestResultRevision');
+        localStorage.removeItem('ri-genshin.debug.open-panel-last');
+        sessionStorage.removeItem('ri-genshin.assistant.runtimeReset.v1');
+        {placement}
+        window.dispatchEvent(new CustomEvent('ri-genshin-watch-state', {{ detail: false }}));
+        window.dispatchEvent(new CustomEvent('ri-genshin-scanning-state', {{ detail: false }}));
+        "#
     );
+
+    let _ = window.eval(&script);
+}
+
+fn smoke_event_log_path() -> Result<PathBuf, String> {
+    let path = std::env::current_dir()
+        .map_err(|error| format!("Unable to resolve current dir for smoke log: {error}"))?
+        .join("logs")
+        .join("native-window-smoke")
+        .join("frontend-events.log");
+
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|error| {
+            format!(
+                "Unable to create smoke log directory {}: {error}",
+                parent.display()
+            )
+        })?;
+    }
+
+    Ok(path)
 }
 
 #[cfg(target_os = "windows")]
@@ -607,8 +619,13 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
+            let deterministic_layout = std::env::var("RI_GENSHIN_SMOKE").ok().as_deref() == Some("1");
+            if deterministic_layout {
+                let smoke_log = smoke_event_log_path().map_err(std::io::Error::other)?;
+                let _ = std::fs::remove_file(smoke_log);
+            }
             if let Some(main) = app.get_webview_window("main") {
-                reset_assistant_runtime_storage(&main);
+                reset_assistant_runtime_storage(&main, deterministic_layout);
                 main.hide()?;
             }
             if let Some(overlay) = app.get_webview_window("roi-overlay") {
@@ -619,7 +636,7 @@ pub fn run() {
                 overlay.hide()?;
             }
             if let Some(bubble) = app.get_webview_window("assistant-bubble") {
-                reset_assistant_runtime_storage(&bubble);
+                reset_assistant_runtime_storage(&bubble, deterministic_layout);
                 let _ = bubble.set_shadow(false);
                 // Mouse events still reach the WebView, but keyboard focus stays with
                 // the game so borderless/fullscreen clients are not minimized by clicks.
@@ -650,6 +667,7 @@ pub fn run() {
             start_assistant_drag,
             quit_app,
             show_fixture_playground,
+            debug_record_event,
             scanner_status,
             scanner_scan_visible_artifact,
             scanner_scan_region_artifact,
@@ -665,7 +683,8 @@ pub fn run() {
             scanner_parse_screenshot_fixture,
             scanner_classify_region_fixture,
             scanner_classify_screenshot_artifact,
-            scanner_classify_screenshot_fixture
+            scanner_classify_screenshot_fixture,
+            scanner_detect_artifact_region
         ])
         .run(tauri::generate_context!())
         .expect("error while running Tauri application");

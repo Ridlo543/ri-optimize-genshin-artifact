@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
-import { isTauri } from "@tauri-apps/api/core";
+import { invoke, isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ScannerArtifactResult } from "@ri-genshin/artifact-schema";
 import { AssistantBubbleSurface } from "./AssistantBubbleSurface";
 import { buildAssistantSummary } from "./assistantSummary";
 import {
   assistantWindowRect,
+  assistantWindowRectFromCurrentWindow,
   COLLAPSED_ASSISTANT_SIZE,
   EXPANDED_ASSISTANT_DETAILS_SIZE,
   EXPANDED_ASSISTANT_SIZE,
@@ -22,6 +23,7 @@ import { classifyRegionArtifact, scanRegionArtifact, scannerStatus, ScannerStatu
 import {
   loadLatestScannerResult,
   loadLatestScannerResultRevision,
+  saveRoiEditingState,
   loadScanRegion,
   saveLatestScannerResult,
   subscribeLatestScannerResult
@@ -31,6 +33,7 @@ import {
   ArtifactMainStatCorrectionSelection,
   ArtifactSlotCorrectionSelection,
   getArtifactMainStatOptions,
+  getInitialScannerCorrections,
   getScannerCorrectionState
 } from "./scannerCorrection";
 import {
@@ -65,8 +68,16 @@ export function AssistantBubbleApp() {
   const roiAttention = shouldHighlightRoi(result);
   const surfaceStyle = useMemo(() => browserAssistantSurfaceStyle(collapsed, detailsOpen), [collapsed, detailsOpen]);
   const statusRef = useRef(status);
+  const statusPollingRef = useRef(false);
   const draggingRef = useRef(false);
   const dragSettledTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const initial = getInitialScannerCorrections(result);
+    setManualLevel(initial.level);
+    setManualSlotKey(initial.slotKey);
+    setManualMainStatKey(initial.mainStatKey);
+  }, [result]);
 
   useEffect(() => {
     statusRef.current = status;
@@ -125,6 +136,10 @@ export function AssistantBubbleApp() {
 
     let ignore = false;
     async function refreshStatus() {
+      if (statusPollingRef.current) {
+        return;
+      }
+      statusPollingRef.current = true;
       try {
         const next = await scannerStatus();
         if (!ignore) {
@@ -134,6 +149,8 @@ export function AssistantBubbleApp() {
         if (!ignore) {
           setError(caught instanceof Error ? caught.message : "Scanner status unavailable.");
         }
+      } finally {
+        statusPollingRef.current = false;
       }
     }
 
@@ -152,15 +169,18 @@ export function AssistantBubbleApp() {
     if (draggingRef.current) {
       return;
     }
-    // Skip when neither the game position nor a manual placement is known.
-    // Without this guard the window would jump to the top-left fallback (32 px, 72 px).
-    if (!status?.available && !placement) {
-      return;
-    }
 
-    void syncAssistantWindowBounds(assistantWindowRect(status, region, collapsed, detailsOpen, window.devicePixelRatio, placement)).catch((caught) => {
-      setError(caught instanceof Error ? caught.message : "Unable to resize assistant.");
-    });
+    void (async () => {
+      try {
+        const nextRect =
+          status?.available || placement
+            ? assistantWindowRect(status, region, collapsed, detailsOpen, window.devicePixelRatio, placement)
+            : assistantWindowRectFromCurrentWindow(await getAssistantWindowBounds(), collapsed, detailsOpen, window.devicePixelRatio);
+        await syncAssistantWindowBounds(nextRect);
+      } catch (caught) {
+        setError(caught instanceof Error ? caught.message : "Unable to resize assistant.");
+      }
+    })();
   }, [collapsed, detailsOpen, placement, region, status]);
 
   useEffect(() => {
@@ -197,6 +217,15 @@ export function AssistantBubbleApp() {
 
     try {
       await lockRoiEditor().catch(() => undefined);
+      const classification = await classifyRegionArtifact(region);
+      if (!classification.screenState?.readyForArtifactOcr) {
+        lastHashRef.current = classification.capture.regionHash ?? null;
+        setResult(classification);
+        saveLatestScannerResult(classification);
+        setError(classification.screenState?.message ?? classification.error ?? "Adjust scan area.");
+        return;
+      }
+
       const scan = await scanRegionArtifact(region, { occlusionAvoided: true });
       lastHashRef.current = scan.capture.regionHash ?? null;
       setResult(scan);
@@ -240,19 +269,23 @@ export function AssistantBubbleApp() {
 
   async function editRoi() {
     try {
-      const next = status?.available ? status : await scannerStatus();
-      setStatus(next);
-      await openRoiEditor(next);
+      saveRoiEditingState(true);
+      await openRoiEditor(status);
       setError("");
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Unable to open ROI editor.");
+      saveRoiEditingState(false);
+      setError(caught instanceof Error ? caught.message : "Unable to open area editor.");
     }
   }
 
   async function openPanel() {
     try {
+      localStorage.setItem("ri-genshin.debug.open-panel-last", new Date().toISOString());
+      await recordSmokeEvent("bubble-open-panel-handler");
       await showMainWindow();
+      await recordSmokeEvent("bubble-open-panel-native-shown");
     } catch (caught) {
+      await recordSmokeEvent("bubble-open-panel-error");
       setError(caught instanceof Error ? caught.message : "Main panel unavailable");
     }
   }
@@ -314,16 +347,22 @@ export function AssistantBubbleApp() {
 
   async function toggleCollapsed() {
     if (!collapsed) {
+      await recordSmokeEvent("bubble-collapse-handler");
       // Collapsing: shrink content immediately; the useEffect will resize the native window.
       setCollapsed(true);
       return;
     }
+    await recordSmokeEvent("bubble-expand-handler");
     // Expanding: pre-resize the native window before React renders expanded content so the
     // content is never clipped inside a still-collapsed window.
     // Only pre-resize when we have a reference point (game detected or manual placement).
-    if (isTauri() && (status?.available || placement) && !draggingRef.current) {
+    if (isTauri() && !draggingRef.current) {
       try {
-        await syncAssistantWindowBounds(assistantWindowRect(status, region, false, detailsOpen, window.devicePixelRatio, placement));
+        const nextRect =
+          status?.available || placement
+            ? assistantWindowRect(status, region, false, detailsOpen, window.devicePixelRatio, placement)
+            : assistantWindowRectFromCurrentWindow(await getAssistantWindowBounds(), false, detailsOpen, window.devicePixelRatio);
+        await syncAssistantWindowBounds(nextRect);
       } catch {
         // Ignore resize errors; still expand the content.
       }
@@ -410,6 +449,18 @@ export function AssistantBubbleApp() {
       onQuit={() => void handleQuit()}
     />
   );
+}
+
+async function recordSmokeEvent(event: string): Promise<void> {
+  if (!isTauri()) {
+    return;
+  }
+
+  try {
+    await invoke("debug_record_event", { event });
+  } catch {
+    // Ignore smoke-only instrumentation failures.
+  }
 }
 
 function shouldHighlightRoi(result: ScannerArtifactResult | null): boolean {

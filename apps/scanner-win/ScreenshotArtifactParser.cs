@@ -5,41 +5,53 @@ namespace GenshinArtifactScanner.Win;
 
 internal sealed class ScreenshotArtifactParser(ArtifactOcrService ocrService)
 {
-    private static readonly ScreenshotLayoutProfile BagInventoryProfile = new(
-        "bag-inventory-card",
-        new RectangleF(1308f / 1920f, 120f / 1200f, 494f / 1920f, 962f / 1200f),
-        new ScreenshotFieldRectangles(
-            Name: RectFromCard(0, 0, 494, 57),
-            Slot: RectFromCard(31, 57, 234, 77),
-            MainStat: RectFromCard(31, 151, 225, 32),
-            Level: RectFromCard(31, 312, 69, 33),
-            Lock: RectFromCard(369, 303, 47, 47),
-            Substats: RectFromCard(31, 350, 409, 151),
-            Equipped: RectFromCard(31, 904, 420, 55)));
+    private static ScreenshotLayoutProfile CreateBagProfile()
+    {
+        return new ScreenshotLayoutProfile(
+            "bag-inventory-card",
+            RectFromScreen(1308, 120, 494, 962),
+            new ScreenshotFieldRectangles(
+                Name: RectFromCard(0, 0, 494, 57),
+                Slot: RectFromCard(31, 57, 234, 77),
+                MainStat: RectFromCard(31, 151, 225, 32),
+                Level: RectFromCard(31, 312, 69, 33),
+                Lock: RectFromCard(369, 303, 47, 47),
+                Substats: RectFromCard(31, 350, 409, 151),
+                Equipped: RectFromCard(31, 904, 420, 55)))
+        {
+            FixedPanelHeight = 962
+        };
+    }
 
-    private static readonly ScreenshotLayoutProfile EquippedCharacterProfile = new(
-        "equipped-character-panel",
-        null,
-        new ScreenshotFieldRectangles(
-            Name: RectFromScreen(1463, 119, 420, 60),
-            Slot: RectFromScreen(1463, 176, 360, 42),
-            MainStat: RectFromScreen(1463, 210, 260, 58),
-            Level: RectFromScreen(1463, 303, 120, 50),
-            Lock: RectFromScreen(1784, 169, 47, 47),
-            Substats: RectFromScreen(1463, 348, 455, 180),
-            Equipped: RectFromScreen(1463, 1030, 420, 60)));
+    private static ScreenshotLayoutProfile CreateCharacterProfile()
+    {
+        return new ScreenshotLayoutProfile(
+            "equipped-character-panel",
+            null,
+            new ScreenshotFieldRectangles(
+                Name: RectFromScreen(1463, 119, 420, 60),
+                Slot: RectFromScreen(1463, 176, 360, 42),
+                MainStat: RectFromScreen(1463, 210, 260, 58),
+                Level: RectFromScreen(1463, 303, 120, 50),
+                Lock: RectFromScreen(1784, 169, 47, 47),
+                Substats: RectFromScreen(1463, 348, 455, 180),
+                Equipped: RectFromScreen(1463, 1030, 420, 60)));
+    }
 
-    private static readonly ScreenshotLayoutProfile EquippedCharacterLongTitleProfile = new(
-        "equipped-character-panel-long-title",
-        null,
-        new ScreenshotFieldRectangles(
-            Name: RectFromScreen(1463, 119, 420, 96),
-            Slot: RectFromScreen(1463, 218, 360, 42),
-            MainStat: RectFromScreen(1463, 250, 260, 42),
-            Level: RectFromScreen(1463, 328, 120, 58),
-            Lock: RectFromScreen(1784, 169, 47, 47),
-            Substats: RectFromScreen(1463, 376, 455, 224),
-            Equipped: RectFromScreen(1463, 1030, 420, 60)));
+    private static ScreenshotLayoutProfile CreateCharacterLongTitleProfile()
+    {
+        return new ScreenshotLayoutProfile(
+            "equipped-character-panel-long-title",
+            null,
+            new ScreenshotFieldRectangles(
+                Name: RectFromScreen(1463, 119, 420, 96),
+                Slot: RectFromScreen(1463, 218, 360, 42),
+                MainStat: RectFromScreen(1463, 250, 260, 42),
+                Level: RectFromScreen(1463, 328, 120, 58),
+                Lock: RectFromScreen(1784, 169, 47, 47),
+                Substats: RectFromScreen(1463, 376, 455, 224),
+                Equipped: RectFromScreen(1463, 1030, 420, 60)));
+    }
 
     private readonly ArtifactOcrService ocrService = ocrService ?? throw new ArgumentNullException(nameof(ocrService));
 
@@ -69,14 +81,28 @@ internal sealed class ScreenshotArtifactParser(ArtifactOcrService ocrService)
             return CreateNotReadyResult(screenshot, source, mode, screenshotPath, screenshotHash, screenState);
         }
 
-        ScreenshotLayoutProfile profile = screenState.Code == ScreenStateCodes.ArtifactBagDetail
-            ? BagInventoryProfile
-            : EquippedCharacterProfile;
-        FieldReadResult fields = ReadFields(screenshot, profile, writeDebugImage);
-        if (profile == EquippedCharacterProfile)
+        bool isBag = screenState.Code == ScreenStateCodes.ArtifactBagDetail;
+
+        // First pass: proportional scaling (no yShift)
+        FieldReadResult fields = isBag
+            ? ReadFields(screenshot, CreateBagProfile(), writeDebugImage)
+            : ReadFields(screenshot, CreateCharacterProfile(), writeDebugImage);
+
+        if (!isBag)
         {
-            FieldReadResult alternateFields = ReadFields(screenshot, EquippedCharacterLongTitleProfile, writeDebugImage);
+            // Long-title merge reuses Lock and Location from primary:
+            // their crop rectangles are identical between profiles,
+            // and MergeCharacterFields always inherits them from primary.
+            FieldReadResult alternateFields = ReadFields(screenshot, CreateCharacterLongTitleProfile(), writeDebugImage,
+                precomputedLocked: fields.Locked, precomputedLocation: fields.Location);
             fields = MergeCharacterFields(fields, alternateFields);
+        }
+
+        // Second pass: if slot or mainStat are missing at non-1200p, try with yShift
+        if (!isBag && screenshot.Height != 1200 && (string.IsNullOrWhiteSpace(fields.Slot.Value) || string.IsNullOrWhiteSpace(fields.MainStat.Value)))
+        {
+            int yShift = (1200 - screenshot.Height) * 7 / 20;
+            fields = ApplyShiftedFallback(fields, screenshot, yShift, writeDebugImage);
         }
 
         string? panelImagePath = writeDebugImage && fields.Panel is not null
@@ -243,6 +269,13 @@ internal sealed class ScreenshotArtifactParser(ArtifactOcrService ocrService)
         if (profile.PanelRect is RectangleF panelRect)
         {
             Rectangle absolutePanel = ImageCropper.Scale(panelRect, screenshot.Width, screenshot.Height);
+            // Bag inventory card has fixed pixel dimensions (494×962). At non-standard
+            // heights the normalized height would be wrong; restore the actual card height.
+            if (profile.FixedPanelHeight is int fixedHeight)
+            {
+                absolutePanel = new Rectangle(absolutePanel.X, absolutePanel.Y, absolutePanel.Width, fixedHeight);
+            }
+
             panel = ImageCropper.Crop(screenshot, absolutePanel);
             scaler = rect => ImageCropper.Scale(rect, panel.Width, panel.Height);
         }
@@ -282,7 +315,8 @@ internal sealed class ScreenshotArtifactParser(ArtifactOcrService ocrService)
             });
     }
 
-    private FieldReadResult ReadFields(Bitmap screenshot, ScreenshotLayoutProfile profile, bool writeDebugImage)
+    private FieldReadResult ReadFields(Bitmap screenshot, ScreenshotLayoutProfile profile, bool writeDebugImage,
+        OcrFieldResult<bool>? precomputedLocked = null, OcrFieldResult<string>? precomputedLocation = null)
     {
         using FieldCrops crops = CropFields(screenshot, profile);
         OcrFieldResult<string> slot = ocrService.ReadSlotKey(crops.Slot, writeDebugImage: writeDebugImage);
@@ -298,11 +332,59 @@ internal sealed class ScreenshotArtifactParser(ArtifactOcrService ocrService)
             Slot: slot,
             MainStat: mainStat,
             Level: level,
-            Locked: ArtifactVisualClassifier.ReadLock(crops.Lock),
-            Location: ocrService.ReadLocation(crops.Equipped, writeDebugImage: writeDebugImage),
+            Locked: precomputedLocked ?? ArtifactVisualClassifier.ReadLock(crops.Lock),
+            Location: precomputedLocation ?? ocrService.ReadLocation(crops.Equipped, writeDebugImage: writeDebugImage),
             Substats: substats,
             Rarity: ArtifactVisualClassifier.EstimateRarity(crops.Name),
             Rectangles: crops.Rectangles);
+    }
+
+    private FieldReadResult ApplyShiftedFallback(FieldReadResult fields, Bitmap screenshot, int yShift, bool writeDebugImage)
+    {
+        bool slotMissing = string.IsNullOrWhiteSpace(fields.Slot.Value);
+        bool mainStatMissing = string.IsNullOrWhiteSpace(fields.MainStat.Value);
+        if (!slotMissing && !mainStatMissing)
+        {
+            return fields;
+        }
+
+        if (!fields.Rectangles.TryGetValue("slot", out string? slotRectStr) ||
+            !fields.Rectangles.TryGetValue("mainStat", out string? mainStatRectStr))
+        {
+            return fields;
+        }
+
+        OcrFieldResult<string> slot = fields.Slot;
+        OcrFieldResult<string> mainStat = fields.MainStat;
+        Dictionary<string, string> newRects = new(fields.Rectangles);
+
+        if (slotMissing && slotRectStr is not null)
+        {
+            int[] r = slotRectStr.Split(',').Select(int.Parse).ToArray();
+            Rectangle shifted = new(r[0], r[1] + yShift, r[2], r[3]);
+            using Bitmap slotCrop = ImageCropper.Crop(screenshot, shifted);
+            OcrFieldResult<string> slotResult = ocrService.ReadSlotKey(slotCrop, writeDebugImage: writeDebugImage);
+            if (!string.IsNullOrWhiteSpace(slotResult.Value))
+            {
+                slot = slotResult;
+                newRects["slot"] = ImageCropper.Format(shifted);
+            }
+        }
+
+        if (mainStatMissing && mainStatRectStr is not null)
+        {
+            int[] r = mainStatRectStr.Split(',').Select(int.Parse).ToArray();
+            Rectangle shifted = new(r[0], r[1] + yShift, r[2], r[3]);
+            using Bitmap mainStatCrop = ImageCropper.Crop(screenshot, shifted);
+            OcrFieldResult<string> mainStatResult = ocrService.ReadMainStatKey(mainStatCrop, slot.Value, writeDebugImage: writeDebugImage);
+            if (!string.IsNullOrWhiteSpace(mainStatResult.Value))
+            {
+                mainStat = mainStatResult;
+                newRects["mainStat"] = ImageCropper.Format(shifted);
+            }
+        }
+
+        return fields with { Slot = slot, MainStat = mainStat, Rectangles = newRects };
     }
 
     private static OcrFieldResult<int> PreferLeadingLevelFromSubstats(OcrFieldResult<int> level, OcrSubstatsResult substats, bool inferZeroFromUnactivated)
@@ -499,7 +581,7 @@ internal sealed class ScreenshotArtifactParser(ArtifactOcrService ocrService)
         return new RectangleF(x / 1920f, y / 1200f, width / 1920f, height / 1200f);
     }
 
-    private sealed record ScreenshotLayoutProfile(string Name, RectangleF? PanelRect, ScreenshotFieldRectangles Fields);
+    private sealed record ScreenshotLayoutProfile(string Name, RectangleF? PanelRect, ScreenshotFieldRectangles Fields, int? FixedPanelHeight = null);
 
     private sealed record ScreenshotFieldRectangles(
         RectangleF Name,

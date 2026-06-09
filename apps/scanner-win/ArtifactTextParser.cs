@@ -38,6 +38,15 @@ internal static partial class ArtifactTextParser
         ["ichorshowerrhapsody"] = "FragmentOfHarmonicWhimsy"
     };
 
+    private static readonly (string Canonical, string Slot)[] SlotCanonicals =
+    [
+        ("floweroflife", "flower"),
+        ("plumeofdeath", "plume"),
+        ("sandsofeon", "sands"),
+        ("gobletofeonothem", "goblet"),
+        ("circletoflogos", "circlet")
+    ];
+
     public static string? ParseSetKeyFromArtifactName(string text)
     {
         string normalized = NormalizeText(text);
@@ -114,7 +123,25 @@ internal static partial class ArtifactTextParser
             return "circlet";
         }
 
-        return null;
+        return FuzzyMatchSlotKey(normalized);
+    }
+
+    private static string? FuzzyMatchSlotKey(string normalized)
+    {
+        double bestScore = 0;
+        string? bestSlot = null;
+
+        foreach (var (canonical, slot) in SlotCanonicals)
+        {
+            double score = DiceCoefficient(normalized, canonical);
+            if (score > bestScore)
+            {
+                bestScore = score;
+                bestSlot = slot;
+            }
+        }
+
+        return bestScore >= 0.35 ? bestSlot : null;
     }
 
     public static string? ParseMainStatKey(string text, string? slotKey)
@@ -198,6 +225,35 @@ internal static partial class ArtifactTextParser
         }
 
         return null;
+    }
+
+    private static double DiceCoefficient(string a, string b)
+    {
+        if (string.IsNullOrEmpty(a) || string.IsNullOrEmpty(b))
+        {
+            return 0;
+        }
+
+        HashSet<string> bigramsA = GetBigrams(a);
+        HashSet<string> bigramsB = GetBigrams(b);
+
+        if (bigramsA.Count == 0 || bigramsB.Count == 0)
+        {
+            return 0;
+        }
+
+        int intersection = bigramsA.Intersect(bigramsB).Count();
+        return 2.0 * intersection / (bigramsA.Count + bigramsB.Count);
+    }
+
+    private static HashSet<string> GetBigrams(string text)
+    {
+        HashSet<string> bigrams = new(text.Length - 1);
+        for (int i = 0; i < text.Length - 1; i++)
+        {
+            bigrams.Add(text.AsSpan(i, 2).ToString());
+        }
+        return bigrams;
     }
 
     private static bool IsShortMainStatToken(string normalized, char prefix)

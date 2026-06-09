@@ -57,23 +57,113 @@ internal sealed class ArtifactOcrService(OcrTextReader reader)
     public OcrFieldResult<string> ReadSlotKey(string imagePath, bool writeDebugImage = false)
     {
         OcrFieldResult<string> text = ReadTextField(imagePath, "slotKey", PageSegMode.SingleLine, writeDebugImage);
-        return ParseSlotKey(text);
+        OcrFieldResult<string> parsed = ParseSlotKey(text);
+        if (!string.IsNullOrWhiteSpace(parsed.Value))
+        {
+            return parsed;
+        }
+
+        OcrFieldResult<string> fallback = ReadTextField(imagePath, "slotKey", PageSegMode.SingleWord, writeDebugImage);
+        parsed = ParseSlotKey(fallback);
+        if (!string.IsNullOrWhiteSpace(parsed.Value))
+        {
+            return parsed;
+        }
+
+        OcrFieldResult<string> ikText = ReadSlotTextField(imagePath, "slotKey", PageSegMode.SingleLine, writeDebugImage);
+        OcrFieldResult<string> ikParsed = ParseSlotKey(ikText);
+        if (!string.IsNullOrWhiteSpace(ikParsed.Value) && ikText.Confidence >= 0.45)
+        {
+            return ikParsed;
+        }
+
+        return new OcrFieldResult<string>
+        {
+            Field = "slotKey",
+            Value = null,
+            RawText = ikText.RawText,
+            Confidence = 0,
+            ImagePath = ikText.ImagePath,
+            DebugImagePath = ikText.DebugImagePath
+        };
     }
 
     public OcrFieldResult<string> ReadSlotKey(Bitmap source, string? imagePath = null, bool writeDebugImage = false)
     {
         OcrFieldResult<string> text = ReadTextField(source, "slotKey", PageSegMode.SingleLine, imagePath, writeDebugImage);
-        return ParseSlotKey(text);
+        OcrFieldResult<string> parsed = ParseSlotKey(text);
+        if (!string.IsNullOrWhiteSpace(parsed.Value))
+        {
+            return parsed;
+        }
+
+        OcrFieldResult<string> fallback = ReadTextField(source, "slotKey", PageSegMode.SingleWord, imagePath, writeDebugImage);
+        parsed = ParseSlotKey(fallback);
+        if (!string.IsNullOrWhiteSpace(parsed.Value))
+        {
+            return parsed;
+        }
+
+        // IK-style preprocessing (contrast 80, no scaling) — last resort, confidence-gated
+        OcrFieldResult<string> ikText = ReadSlotTextField(source, "slotKey", PageSegMode.SingleLine, imagePath, writeDebugImage);
+        OcrFieldResult<string> ikParsed = ParseSlotKey(ikText);
+        if (!string.IsNullOrWhiteSpace(ikParsed.Value) && ikText.Confidence >= 0.45)
+        {
+            return ikParsed;
+        }
+
+        return new OcrFieldResult<string>
+        {
+            Field = "slotKey",
+            Value = null,
+            RawText = ikText.RawText,
+            Confidence = 0,
+            ImagePath = ikText.ImagePath,
+            DebugImagePath = ikText.DebugImagePath
+        };
     }
 
     public OcrFieldResult<string> ReadMainStatKey(string imagePath, string? slotKey, bool writeDebugImage = false)
     {
-        OcrFieldResult<string> text = ReadTextField(imagePath, "mainStatKey", PageSegMode.SingleLine, writeDebugImage);
-        return ParseMainStatKey(text, slotKey);
+        if (string.IsNullOrWhiteSpace(imagePath))
+        {
+            throw new ArgumentException("Image path is required.", nameof(imagePath));
+        }
+        if (!File.Exists(imagePath))
+        {
+            throw new FileNotFoundException($"{nameof(imagePath)} was not found.", imagePath);
+        }
+
+        using Bitmap source = new(imagePath);
+        return ReadMainStatKey(source, slotKey, Path.GetFullPath(imagePath), writeDebugImage);
     }
 
     public OcrFieldResult<string> ReadMainStatKey(Bitmap source, string? slotKey, string? imagePath = null, bool writeDebugImage = false)
     {
+        // Short-circuit for fixed main stats (no OCR needed)
+        if (slotKey == "flower")
+        {
+            return new OcrFieldResult<string>
+            {
+                Field = "mainStatKey",
+                Value = "hp",
+                RawText = "slot-flower",
+                Confidence = 0.98,
+                ImagePath = imagePath is null ? null : Path.GetFullPath(imagePath)
+            };
+        }
+        if (slotKey == "plume")
+        {
+            return new OcrFieldResult<string>
+            {
+                Field = "mainStatKey",
+                Value = "atk",
+                RawText = "slot-plume",
+                Confidence = 0.98,
+                ImagePath = imagePath is null ? null : Path.GetFullPath(imagePath)
+            };
+        }
+
         OcrFieldResult<string> text = ReadTextField(source, "mainStatKey", PageSegMode.SingleLine, imagePath, writeDebugImage);
         OcrFieldResult<string> parsed = ParseMainStatKey(text, slotKey);
         if (!string.IsNullOrWhiteSpace(parsed.Value))
@@ -88,6 +178,20 @@ internal sealed class ArtifactOcrService(OcrTextReader reader)
             return fallback;
         }
 
+        OcrFieldResult<string> autoText = ReadTextField(source, "mainStatKey-auto", PageSegMode.Auto, imagePath, writeDebugImage);
+        OcrFieldResult<string> autoFallback = ParseMainStatKey(autoText, slotKey);
+        if (!string.IsNullOrWhiteSpace(autoFallback.Value))
+        {
+            return autoFallback;
+        }
+
+        OcrFieldResult<string> narrowText = ReadNarrowMainStatKey(source, imagePath, writeDebugImage);
+        OcrFieldResult<string> narrowFallback = ParseMainStatKey(narrowText, slotKey);
+        if (!string.IsNullOrWhiteSpace(narrowFallback.Value))
+        {
+            return narrowFallback;
+        }
+
         OcrFieldResult<string> visual = ArtifactVisualClassifier.ReadShortMainStat(source, slotKey, imagePath);
         if (!string.IsNullOrWhiteSpace(visual.Value))
         {
@@ -98,11 +202,20 @@ internal sealed class ArtifactOcrService(OcrTextReader reader)
         {
             Field = "mainStatKey",
             Value = null,
-            RawText = string.Join(" | ", new[] { text.RawText, fallbackText.RawText, visual.RawText }.Where(value => !string.IsNullOrWhiteSpace(value))),
+            RawText = string.Join(" | ", new[] { text.RawText, fallbackText.RawText, autoText.RawText, narrowText.RawText, visual.RawText }.Where(value => !string.IsNullOrWhiteSpace(value))),
             Confidence = 0,
             ImagePath = imagePath is null ? null : Path.GetFullPath(imagePath),
             DebugImagePath = fallbackText.DebugImagePath ?? text.DebugImagePath
         };
+    }
+
+    private OcrFieldResult<string> ReadNarrowMainStatKey(Bitmap source, string? imagePath, bool writeDebugImage)
+    {
+        int cropStartY = Math.Max(0, source.Height / 2);
+        int cropHeight = source.Height - cropStartY;
+        Rectangle cropRect = new(0, cropStartY, source.Width, cropHeight);
+        using Bitmap narrow = ImageCropper.Crop(source, cropRect);
+        return ReadTextField(narrow, "mainStatKey-narrow", PageSegMode.SingleWord, imagePath, writeDebugImage);
     }
 
     public OcrFieldResult<int> ReadLevel(string imagePath, bool writeDebugImage = false)
@@ -264,6 +377,40 @@ internal sealed class ArtifactOcrService(OcrTextReader reader)
         ArgumentNullException.ThrowIfNull(source);
 
         using Bitmap processed = ArtifactImagePreprocessor.PreprocessLevel(source);
+        string? debugImagePath = writeDebugImage ? ArtifactImagePreprocessor.SaveDebugImage(processed, imagePath ?? fieldName, fieldName) : null;
+        OcrTextResult text = reader.ReadText(processed, pageSegMode);
+
+        return new OcrFieldResult<string>
+        {
+            Field = fieldName,
+            Value = null,
+            RawText = text.Text.Trim(),
+            Confidence = text.Confidence,
+            ImagePath = imagePath is null ? null : Path.GetFullPath(imagePath),
+            DebugImagePath = debugImagePath
+        };
+    }
+
+    private OcrFieldResult<string> ReadSlotTextField(string imagePath, string fieldName, PageSegMode pageSegMode, bool writeDebugImage)
+    {
+        if (string.IsNullOrWhiteSpace(imagePath))
+        {
+            throw new ArgumentException("Image path is required.", nameof(imagePath));
+        }
+        if (!File.Exists(imagePath))
+        {
+            throw new FileNotFoundException($"{fieldName} image was not found.", imagePath);
+        }
+
+        using Bitmap source = new(imagePath);
+        return ReadSlotTextField(source, fieldName, pageSegMode, Path.GetFullPath(imagePath), writeDebugImage);
+    }
+
+    private OcrFieldResult<string> ReadSlotTextField(Bitmap source, string fieldName, PageSegMode pageSegMode, string? imagePath, bool writeDebugImage)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+
+        using Bitmap processed = ArtifactImagePreprocessor.PreprocessSlot(source);
         string? debugImagePath = writeDebugImage ? ArtifactImagePreprocessor.SaveDebugImage(processed, imagePath ?? fieldName, fieldName) : null;
         OcrTextResult text = reader.ReadText(processed, pageSegMode);
 

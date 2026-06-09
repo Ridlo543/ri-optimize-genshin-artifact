@@ -66,4 +66,17 @@ if ($PreflightOnly) {
     return
 }
 
+Write-Host "Publishing scanner sidecar for fast Tauri dev startup..."
+& powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "publish-scanner-sidecar.ps1")
+if ($LASTEXITCODE -ne 0) {
+    throw "Failed to publish scanner sidecar for Tauri dev."
+}
+
+$scannerExe = Join-Path $repoRoot "apps\desktop\src-tauri\binaries\scanner-publish\GenshinArtifactScanner.Win.exe"
+if (!(Test-Path -LiteralPath $scannerExe)) {
+    throw "Published scanner executable was not found for Tauri dev: $scannerExe"
+}
+$env:GENSHIN_SCANNER_PATH = $scannerExe
+Write-Host "Using scanner executable: $scannerExe"
+
 pnpm --filter "@ri-genshin/desktop" tauri dev

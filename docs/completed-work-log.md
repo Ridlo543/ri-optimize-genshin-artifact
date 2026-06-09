@@ -154,11 +154,11 @@ This file is the historical ledger.
   - `IsBagArtifactPanel` now requires `Beige > 0.15` before accepting any color-based match, preventing teal or blue/purple character panels from being classified as bag cards due to rarity accent colors.
   - `ScreenStateDetector.Detect` adds a `rightTitleLight > 0.06` fallback for full-screenshot detection; the bright multi-line white title text in the character artifact panel reliably exceeds the threshold while gold bag-card text does not.
   - Regression tests: `GenshinImpact_yY0600CANu.png` and `GenshinImpact_G2ZhtL0vyo.png` now classify as `CharacterArtifactDetail` and parse correctly.
-- [x] Fix padded ROI level OCR for manual bag-detail repro `bug_new4`.
+- [x] Fix padded ROI level OCR for manual bag-detail repro `bug_new_4`.
   - `ArtifactRegionParser` now uses a wider ROI bag-card level crop so slightly padded live ROIs still include the `+20` badge.
   - `ArtifactImagePreprocessor.PreprocessLevel` now isolates the top-left dark level badge component instead of merging unrelated dark text below it.
   - `ArtifactOcrService.ReadLevel` adds an extra thresholded single-word fallback pass, and `ArtifactTextParser.ParseLevel` now accepts clean digit-only level reads such as `20`.
-  - Regression test `ParseFile_LockedBagRoiWithPaddingStillReadsArtifact` covers `data/log-manual/bug_new4/GenshinImpact_d6QhwtaXj4.jpg`.
+  - Regression test `ParseFile_LockedBagRoiWithPaddingStillReadsArtifact` covers `data/log-manual/bug_new_4/GenshinImpact_d6QhwtaXj4.jpg`.
 - [x] Fix Tauri release/runtime scanner parity on repo machines.
   - `apps/desktop/src-tauri/src/lib.rs` now prefers the bundled scanner sidecar in non-debug builds instead of silently running `apps/scanner-win/bin/Debug/net10.0-windows/GenshinArtifactScanner.Win.exe` when that file exists.
   - `pnpm --filter @ri-genshin/desktop build:tauri` republishes the current scanner sidecar, and `pnpm --filter @ri-genshin/desktop tauri build` completes with the updated scanner binary.
@@ -167,11 +167,94 @@ This file is the historical ledger.
   - The published sidecar `apps/desktop/src-tauri/binaries/GenshinArtifactScanner.Win.exe` returns the same successful ROI result for the same repro.
   - `dotnet test apps/scanner-win.Tests/GenshinArtifactScanner.Win.Tests.csproj --no-restore` passes with 91 tests.
 
+## Completed In 2026-06-10 Session
+
+- [x] **1080p resolution support for character detail OCR** (`apps/scanner-win/ScreenshotArtifactParser.cs`):
+  - Discovered that yShift=42px is **required for some** 1080p character panels and **harmful for others** (text at proportionally scaled positions vs shifted).
+  - Implemented conditional yShift fallback: first pass uses proportional scaling (no shift); if slot/mainStat missing AND height ≠ 1200, retry with yShift and merge results.
+  - Both 1080p character detail fixtures pass: one via no-shift, one via shifted fallback.
+  - Removed universal yShift from `ParseBitmap` (was breaking one of two 1080p images).
+  - Restored `ApplyShiftedFallback` as conditional (no-shift-first), not universal.
+
+- [x] **Dual aspect-ratio profiles** (`apps/scanner-win/ScreenshotArtifactParser.cs`):
+  - Replaced static readonly profiles `BagInventoryProfile`, `EquippedCharacterProfile`, `EquippedCharacterLongTitleProfile` with factory methods `CreateBagProfile()`, `CreateCharacterProfile()`, `CreateCharacterLongTitleProfile()`.
+  - Removed yShift from `CropFields` and `ReadFields` parameters (now passed separately by `ParseBitmap`).
+  - Same 1200p-reference coordinates; yShift applied only as conditional fallback.
+
+- [x] **Dice coefficient fuzzy matching for slot OCR** (`apps/scanner-win/ArtifactTextParser.cs`):
+  - `DiceCoefficient(s1, s2)` — bigram Dice similarity for fuzzy text matching.
+  - `FuzzyMatchSlotKey(raw, threshold=0.35)` — fallback in `ParseSlotKey` when exact substring fails.
+  - Recovers garbled slot text: "pumeordean" → "plume" (Dice 0.5), "Goblet of Eonothem" → "goblet" (Dice 0.385).
+  - 12 dedicated unit tests covering match and rejection cases.
+  - NOT applied to mainStat (false positive risk with short 2-4 char tokens).
+
+- [x] **IK-style slot preprocessing** (`apps/scanner-win/ArtifactImagePreprocessor.cs` + `ArtifactOcrService.cs`):
+  - `PreprocessSlot(bitmap)` → Contrast(80) → Grayscale → Invert (no scaling). Adapted from Inventory_Kamera.
+  - Added as last-resort fallback in `ReadSlotKey` with confidence gate ≥ 0.45.
+  - MainStat IK preprocessing NOT added (caused false positive "heal_" → "def_" on goblet).
+
+- [x] **Flower/plume mainStat short-circuit** (`apps/scanner-win/ArtifactOcrService.cs`):
+  - `ReadMainStatKey` returns "hp" when slot is flower, "atk" when slot is plume — no OCR needed.
+  - Follows Inventory_Kamera pattern at `ArtifactScraper.cs:454-462`.
+
+- [x] **1080p regression fixtures** (`apps/scanner-win.Tests/ScreenshotArtifactParserTests.cs`):
+  - `ParseFile_BagInventory1080p1_ReadsArtifact` — bag inventory at 1920×1080, passes via proportional scaling.
+  - `ParseFile_BagInventory1080p2_ReadsArtifact` — second bag inventory at 1080p, passes.
+  - `ParseFile_CharacterDetail1080p1_ReadsArtifact` — character detail at 1080p, passes via no-shift.
+  - `ParseFile_CharacterDetail1080p2_ReadsArtifact` — character detail at 1080p, passes via shifted fallback.
+
+- [x] **Documentation updated**:
+  - `AGENTS.md` — Resolution Handling section updated with Dice, IK, short-circuit, dual profiles.
+  - `docs/todo.md` — test count 106→122, new changes listed, TODO #4 marked done.
+  - `docs/completed-work-log.md` — this entry.
+
+- [x] **122/122 scanner tests pass** (was 106).
+  - 106 original + 12 Dice fuzzy matching + 4 1080p fixture tests.
+
+## Completed In 2026-06-09 Session
+
+- [x] **Data refactoring for maintainability** (`packages/artifact-schema` + `packages/probability-core`):
+  - Added `STAT_TYPE_TO_LABEL: Record<StatType, string>` in `good.ts` — human-readable names for every stat type.
+  - Added `STAT_TYPE_IS_PERCENT: ReadonlySet<StatType>` — identifies which stats are percent-based for UI formatting.
+  - Removed duplicate `ARTIFACT_MAX_LEVEL_BY_RARITY` from `packages/probability-core/src/constants.ts`. Now imports `ArtifactLevel` from `@ri-genshin/artifact-schema`.
+  - All 13 probability-core tests pass.
+
+- [x] **Probability model: weighted roll value distribution** (`packages/probability-core`):
+  - Added `ROLL_VALUE_WEIGHTS_BY_RARITY: Record<number, number[]>` with community-datamined distribution:
+    - 5-star/4-star/3-star: weights `[7,5,3,1]` → 44%/31%/19%/6% probabilities
+    - 2-star: weights `[3,2,1]` → 50%/33%/17% probabilities
+  - Added `getRollValueProbabilities(rarity)` in `distribution.ts` — returns normalized probability per roll-value tier.
+  - Updated `enumerateOutcomes()` in `exact.ts` to use `rollProbs[vi]` instead of `1/rollValues.length`.
+  - Bumped `PROBABILITY_MODEL_VERSION` from `"artifact-exact-v2"` to `"artifact-exact-v3"`.
+  - Previously used uniform 25% chance per tier — this systematically overestimated low-value rolls and underestimated high-value rolls.
+  - All 13 probability-core tests pass; `probabilityByTargetRollCount` tests unchanged (depends on stat-selection probability, not roll-value weighting).
+
+- [x] **OCR improvement: Otsu thresholding for level badge** (`apps/scanner-win/ArtifactImagePreprocessor.cs`):
+  - `ComputeOtsuThreshold()` — computes optimal binarization threshold from pixel intensity histogram by maximizing between-class variance. Standard Otsu's method (Nobuyuki Otsu, 1979).
+  - `ThresholdLightText()` — now uses Otsu threshold instead of hardcoded brightness=150.
+  - Adapts automatically to varying screenshot brightness/contrast without hardcoded cutoffs.
+  - Tested 2x substat scaling but reverted: bicubic interpolation blurred unactivated (grayed-out) text edges, causing OCR regression.
+  - 106/106 scanner tests pass (no regression from fixed threshold).
+
+- [x] **ROI flow UX improvements** (`apps/desktop`):
+  - "Edit ROI" → "Set Area" everywhere (main toolbar, bubble, assistant summary). Tooltip explains action.
+  - Gold pulse animation (`@keyframes roi-pulse`) on Set Area button when no scan area configured — draws user's attention to the right button.
+  - Initial message replaced with numbered steps: "1. Click Set Area → 2. Place box over artifact → 3. Click Use This Area → 4. Click Analyze".
+  - All user-facing "ROI" text → "scan area" / "red box" / "artifact detail panel".
+  - 2 test expectations updated in `assistantSummary.test.ts`.
+
+- [x] **UI polish: shadow artifacts and icon sizing** (`apps/desktop/src/styles.css`):
+  - Removed all outer `box-shadow` from `.assistant-launcher` (base + `--ready`, `--review`, `--waiting`, `--error`) and `.assistant-bubble`. Only `inset 0 0 0 4px rgba(0,0,0,0.35)` kept for inner depth.
+  - Added `overflow: hidden` to `.assistant-bubble` to clip any remaining visual overflow.
+  - Removed `padding: 3px` from `.assistant-logo-mark`, set `width:100%; height:100%` to fill 72×72 host.
+  - Removed `inset` gold border from launcher base to eliminate double-ring (SVG icon ring + CSS border ring).
+  - Enlarged SVG ring to r=29/64 (stroke 3.5) — ring outer edge at ~99% of viewBox.
+
 ## Historical Regression Fixtures
 
 - `data/log-manual/bug_new_2/GenshinImpact_yY0600CANu.png`
 - `data/log-manual/bug_new_2/GenshinImpact_G2ZhtL0vyo.png`
-- `data/log-manual/bug_new4/GenshinImpact_d6QhwtaXj4.jpg`
+- `data/log-manual/bug_new_4/GenshinImpact_d6QhwtaXj4.jpg`
 - `data/log-manual/GenshinImpact_WGHmIpkN58.jpg`
 - `data/log-manual/GenshinImpact_zuCNecgQiu.jpg`
 - `data/log-manual/iTPXIcUjaV.png`

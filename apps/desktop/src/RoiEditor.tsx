@@ -14,12 +14,13 @@ export interface RoiEditorProps {
   region: ScanRegion;
   editing: boolean;
   onRegionChange?: (region: ScanRegion) => void;
+  onLockRoi?: () => void;
   boundsRef?: RefObject<HTMLElement | null>;
 }
 
 const MIN_REGION_SIZE = 0.05;
 
-export function RoiEditor({ region, editing, onRegionChange, boundsRef }: RoiEditorProps) {
+export function RoiEditor({ region, editing, onRegionChange, onLockRoi, boundsRef }: RoiEditorProps) {
   const boxRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<DragState | null>(null);
 
@@ -57,6 +58,11 @@ export function RoiEditor({ region, editing, onRegionChange, boundsRef }: RoiEdi
       return;
     }
 
+    // Don't start drag when clicking the lock badge button
+    if ((event.target as HTMLElement).closest(".roi-lock-badge")) {
+      return;
+    }
+
     event.preventDefault();
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -86,6 +92,11 @@ export function RoiEditor({ region, editing, onRegionChange, boundsRef }: RoiEdi
           <span className="roi-handle roi-handle--ne" onPointerDown={(event) => startDrag("ne", event)} />
           <span className="roi-handle roi-handle--sw" onPointerDown={(event) => startDrag("sw", event)} />
           <span className="roi-handle roi-handle--se" onPointerDown={(event) => startDrag("se", event)} />
+          {onLockRoi ? (
+            <div className="roi-lock-badge">
+              <button className="primary" onClick={onLockRoi}>Use This Area</button>
+            </div>
+          ) : null}
         </>
       ) : null}
     </div>

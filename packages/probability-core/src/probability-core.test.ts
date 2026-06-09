@@ -116,7 +116,7 @@ describe("artifact probability core", () => {
       mainStatFit: "not-evaluated",
       setFit: "not-evaluated"
     });
-    expect(result.modelVersion).toBe("artifact-exact-v2");
+    expect(result.modelVersion).toBe("artifact-exact-v3");
     expect(result.probabilityReachProfileTarget).toBeGreaterThanOrEqual(0);
     expect(result.probabilityReachProfileTarget).toBeLessThanOrEqual(1);
   });

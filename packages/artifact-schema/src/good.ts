@@ -45,6 +45,58 @@ export const ARTIFACT_MAX_LEVEL_BY_RARITY: Record<ArtifactRarity, ArtifactLevel>
   5: 20
 };
 
+export const STAT_TYPE_TO_LABEL: Record<StatType, string> = {
+  [StatType.FLAT_HP]: "HP",
+  [StatType.FLAT_ATK]: "ATK",
+  [StatType.FLAT_DEF]: "DEF",
+  [StatType.HP_PERCENT]: "HP%",
+  [StatType.ATK_PERCENT]: "ATK%",
+  [StatType.DEF_PERCENT]: "DEF%",
+  [StatType.ELEMENTAL_MASTERY]: "Elemental Mastery",
+  [StatType.ENERGY_RECHARGE]: "Energy Recharge",
+  [StatType.CRIT_RATE]: "CRIT Rate",
+  [StatType.CRIT_DMG]: "CRIT DMG",
+  [StatType.PYRO_DMG]: "Pyro DMG",
+  [StatType.HYDRO_DMG]: "Hydro DMG",
+  [StatType.ELECTRO_DMG]: "Electro DMG",
+  [StatType.CRYO_DMG]: "Cryo DMG",
+  [StatType.ANEMO_DMG]: "Anemo DMG",
+  [StatType.GEO_DMG]: "Geo DMG",
+  [StatType.DENDRO_DMG]: "Dendro DMG",
+  [StatType.PHYSICAL_DMG]: "Physical DMG",
+  [StatType.HEALING_BONUS]: "Healing Bonus"
+};
+
+export const GOOD_STAT_KEY_TO_LABEL: Record<string, string> = Object.fromEntries(
+  Object.entries(GOOD_STAT_TO_STAT_TYPE).map(([key, stat]) => [key, STAT_TYPE_TO_LABEL[stat]])
+) as Record<string, string>;
+
+export const GOOD_SLOT_KEY_TO_LABEL: Record<string, string> = {
+  flower: "Flower",
+  plume: "Plume",
+  sands: "Sands",
+  goblet: "Goblet",
+  circlet: "Circlet"
+};
+
+export const STAT_TYPE_IS_PERCENT: ReadonlySet<StatType> = new Set([
+  StatType.HP_PERCENT,
+  StatType.ATK_PERCENT,
+  StatType.DEF_PERCENT,
+  StatType.ENERGY_RECHARGE,
+  StatType.CRIT_RATE,
+  StatType.CRIT_DMG,
+  StatType.PYRO_DMG,
+  StatType.HYDRO_DMG,
+  StatType.ELECTRO_DMG,
+  StatType.CRYO_DMG,
+  StatType.ANEMO_DMG,
+  StatType.GEO_DMG,
+  StatType.DENDRO_DMG,
+  StatType.PHYSICAL_DMG,
+  StatType.HEALING_BONUS
+]);
+
 export interface GoodImportPayload {
   artifacts?: GoodArtifact[];
   artifact?: GoodArtifact;

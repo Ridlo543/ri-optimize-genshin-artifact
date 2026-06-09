@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { availableMonitors, currentMonitor } from "@tauri-apps/api/window";
 import { ScanRegion } from "@ri-genshin/artifact-schema";
 import { placeAssistantBubble } from "./assistantBubblePlacement";
 import { ScannerStatus } from "./scanner";
@@ -65,6 +66,22 @@ export function assistantWindowRect(
   };
 }
 
+export function assistantWindowRectFromCurrentWindow(
+  current: Pick<PhysicalWindowRect, "x" | "y">,
+  collapsed: boolean,
+  detailsOpen: boolean,
+  dpiScale = 1
+): PhysicalWindowRect {
+  const scale = normalizeDpiScale(dpiScale);
+  const size = scaleSize(collapsed ? COLLAPSED_ASSISTANT_SIZE : detailsOpen ? EXPANDED_ASSISTANT_DETAILS_SIZE : EXPANDED_ASSISTANT_SIZE, scale);
+  return {
+    x: Math.round(current.x),
+    y: Math.round(current.y),
+    width: size.width,
+    height: size.height
+  };
+}
+
 function normalizeDpiScale(value: number): number {
   if (!Number.isFinite(value) || value <= 0) {
     return 1;
@@ -79,12 +96,8 @@ function scaleSize(size: { width: number; height: number }, scale: number): { wi
   };
 }
 
-export async function openRoiEditor(status: ScannerStatus): Promise<void> {
-  const rect = scannerStatusRect(status);
-  if (!rect) {
-    throw new Error(status.error ?? "Waiting for Genshin. Open the game in windowed or borderless mode.");
-  }
-
+export async function openRoiEditor(status?: ScannerStatus | null): Promise<void> {
+  const rect = await resolveOverlayRect(status);
   await invoke("set_roi_overlay_bounds", { rect });
   await invoke("set_roi_edit_mode", { editing: true });
 }
@@ -93,11 +106,8 @@ export async function lockRoiEditor(): Promise<void> {
   await invoke("set_roi_edit_mode", { editing: false });
 }
 
-export async function syncRoiOverlayBounds(status: ScannerStatus): Promise<void> {
-  const rect = scannerStatusRect(status);
-  if (!rect) {
-    throw new Error(status.error ?? "Genshin client bounds are unavailable.");
-  }
+export async function syncRoiOverlayBounds(status?: ScannerStatus | null): Promise<void> {
+  const rect = await resolveOverlayRect(status);
   await invoke("set_roi_overlay_bounds", { rect });
 }
 
@@ -123,4 +133,78 @@ export async function enableMainInput(): Promise<void> {
 
 export async function quitApp(): Promise<void> {
   await invoke("quit_app");
+}
+
+async function resolveOverlayRect(status?: ScannerStatus | null): Promise<PhysicalWindowRect> {
+  const scannerRect = status ? scannerStatusRect(status) : null;
+  if (scannerRect) {
+    return scannerRect;
+  }
+
+  const monitorRect = await resolveMonitorRect();
+  if (monitorRect) {
+    return monitorRect;
+  }
+
+  return {
+    x: Math.round(window.screenX || 0),
+    y: Math.round(window.screenY || 0),
+    width: Math.max(1, Math.round(window.innerWidth || 1280)),
+    height: Math.max(1, Math.round(window.innerHeight || 720))
+  };
+}
+
+async function resolveMonitorRect(): Promise<PhysicalWindowRect | null> {
+  try {
+    const monitor = await currentMonitor();
+    const rect = monitor ? monitorRect(monitor) : null;
+    if (rect) {
+      return rect;
+    }
+  } catch {
+    // Fall through to available monitors and browser viewport fallback.
+  }
+
+  try {
+    const monitors = await availableMonitors();
+    for (const monitor of monitors) {
+      const rect = monitorRect(monitor);
+      if (rect) {
+        return rect;
+      }
+    }
+  } catch {
+    // Fall through to browser viewport fallback.
+  }
+
+  return null;
+}
+
+function monitorRect(monitor: unknown): PhysicalWindowRect | null {
+  if (!isRecord(monitor) || !isRecord(monitor.position) || !isRecord(monitor.size)) {
+    return null;
+  }
+
+  const x = numberOrNull(monitor.position.x);
+  const y = numberOrNull(monitor.position.y);
+  const width = numberOrNull(monitor.size.width);
+  const height = numberOrNull(monitor.size.height);
+  if (x === null || y === null || width === null || height === null) {
+    return null;
+  }
+
+  return {
+    x: Math.round(x),
+    y: Math.round(y),
+    width: Math.max(1, Math.round(width)),
+    height: Math.max(1, Math.round(height))
+  };
+}
+
+function numberOrNull(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }

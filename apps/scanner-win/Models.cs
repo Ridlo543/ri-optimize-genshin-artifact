@@ -317,6 +317,15 @@ internal sealed class OcrFieldResult<T>
     public string? DebugImagePath { get; init; }
 }
 
+internal sealed class DetectArtifactRegionResult
+{
+    [JsonPropertyName("screenState")]
+    public ScreenStateInfo? ScreenState { get; init; }
+
+    [JsonPropertyName("recommendedRegion")]
+    public ScanRegion? RecommendedRegion { get; init; }
+}
+
 internal sealed class ScanDiagnostics
 {
     [JsonPropertyName("fixtureFolder")]

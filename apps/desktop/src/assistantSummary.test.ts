@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { ScannerArtifactResult } from "@ri-genshin/artifact-schema";
+import { ScanConfidence, ScannerArtifactResult } from "@ri-genshin/artifact-schema";
 import { buildAssistantSummary } from "./assistantSummary";
 
 describe("buildAssistantSummary", () => {
   it("prompts for ROI when no scanner result exists", () => {
     expect(buildAssistantSummary(null)).toMatchObject({
       state: "setup",
-      title: "Set ROI"
+      title: "Set Area"
     });
   });
 
@@ -32,7 +32,7 @@ describe("buildAssistantSummary", () => {
 
     expect(buildAssistantSummary(result)).toMatchObject({
       state: "review",
-      title: "Adjust ROI"
+      title: "Adjust Area"
     });
   });
 
@@ -167,6 +167,118 @@ describe("buildAssistantSummary", () => {
     expect(buildAssistantSummary(result)).toMatchObject({
       state: "ready",
       title: "Fodder"
+    });
+  });
+
+  it("shows combined title for multiple missing fields in correction path", () => {
+    const result: ScannerArtifactResult = {
+      source: "screen",
+      mode: "region-artifact",
+      confidence: {
+        setKey: 0.96,
+        slotKey: 0,
+        mainStatKey: 0,
+        level: 0,
+        substats: 0.7
+      },
+      artifact: null,
+      artifactDraft: {
+        setKey: "NoblesseOblige",
+        slotKey: "",
+        rarity: 5,
+        mainStatKey: "",
+        substats: [
+          { key: "critRate_", value: 3.5 },
+          { key: "eleMas", value: 23 }
+        ],
+        unactivatedSubstats: [],
+        lock: false,
+        location: ""
+      },
+      missingFields: ["slotKey", "mainStatKey"],
+      screenState: {
+        code: "artifact-bag-detail",
+        readyForArtifactOcr: true,
+        confidence: 0.9,
+        message: "Artifact ROI detected."
+      },
+      capture: {
+        resolution: "1920x1200",
+        capturedAt: "2026-06-05T00:00:00.000Z",
+        regionHash: "multi-missing"
+      },
+      error: "Region OCR missing required fields: slotKey, mainStatKey."
+    };
+
+    expect(buildAssistantSummary(result)).toMatchObject({
+      state: "review",
+      title: "Review Slot & Main Stat"
+    });
+  });
+
+  it("shows Review Main Stat when non-correction path has low main stat confidence", () => {
+    const lowConfidence: ScanConfidence = {
+      setKey: 0.9,
+      slotKey: 0.96,
+      mainStatKey: 0.28,
+      level: 0.7,
+      substats: 0.6
+    };
+
+    const result: ScannerArtifactResult = {
+      source: "screen",
+      mode: "region-artifact",
+      confidence: lowConfidence,
+      artifact: null,
+      screenState: {
+        code: "character-artifact-detail",
+        readyForArtifactOcr: true,
+        confidence: 0.9,
+        message: "Artifact ROI detected."
+      },
+      capture: {
+        resolution: "1920x1200",
+        capturedAt: "2026-06-05T00:00:00.000Z",
+        regionHash: "low-main"
+      },
+      error: "Review main stat before evaluating."
+    };
+
+    expect(buildAssistantSummary(result)).toMatchObject({
+      state: "review",
+      title: "Review Main Stat"
+    });
+  });
+
+  it("shows Review Substats from blocking reasons", () => {
+    const result: ScannerArtifactResult = {
+      source: "screen",
+      mode: "region-artifact",
+      confidence: {
+        setKey: 0.9,
+        slotKey: 0.96,
+        mainStatKey: 0.95,
+        level: 0.7,
+        substats: 0.3
+      },
+      artifact: null,
+      screenState: {
+        code: "artifact-bag-detail",
+        readyForArtifactOcr: true,
+        confidence: 0.9,
+        message: "Artifact ROI detected."
+      },
+      capture: {
+        resolution: "1920x1200",
+        capturedAt: "2026-06-05T00:00:00.000Z",
+        regionHash: "low-sub"
+      },
+      error: "Review substats before evaluating."
+    };
+
+    expect(buildAssistantSummary(result)).toMatchObject({
+      state: "review",
+      title: "Review Substats"
     });
   });
 });

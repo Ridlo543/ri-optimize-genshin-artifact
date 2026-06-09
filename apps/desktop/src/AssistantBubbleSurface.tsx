@@ -1,5 +1,6 @@
-import { CSSProperties, KeyboardEvent, PointerEvent, useRef } from "react";
-import { Eye, Gem, GripVertical, Info, Maximize2, Minus, Power, RotateCcw, ScanLine, SlidersHorizontal, Square } from "lucide-react";
+import { CSSProperties, FocusEvent, KeyboardEvent, MouseEvent, PointerEvent, useRef } from "react";
+import { isTauri } from "@tauri-apps/api/core";
+import { Eye, GripVertical, Info, Maximize2, Minus, Power, RotateCcw, ScanLine, SlidersHorizontal, Square } from "lucide-react";
 import { AssistantSummary } from "./assistantSummary";
 import { InfoTooltip } from "./InfoTooltip";
 import {
@@ -9,6 +10,7 @@ import {
   ArtifactSlotCorrectionSelection,
   getArtifactMainStatOptions
 } from "./scannerCorrection";
+import { GOOD_SLOT_KEY_TO_LABEL, GOOD_STAT_KEY_TO_LABEL } from "@ri-genshin/artifact-schema";
 
 export interface AssistantLevelCorrection {
   available: boolean;
@@ -69,24 +71,29 @@ export function AssistantBubbleSurface({
   onQuit
 }: AssistantBubbleSurfaceProps) {
   const launcherGesture = useLauncherGesture(onToggleCollapsed, onMove);
+  const passiveMode = isTauri();
+  const passiveFocusProps = passiveMode ? createPassiveFocusProps() : undefined;
 
   if (collapsed) {
     return (
-      <button
-        type="button"
+      <div
+        role="button"
         className={`assistant-launcher assistant-launcher--${summary.state}`}
+        data-testid="assistant-launcher"
         style={style}
         aria-label={`Open artifact assistant: ${summary.title}`}
+        tabIndex={passiveMode ? -1 : 0}
+        {...passiveFocusProps}
         {...launcherGesture}
       >
         <AssistantLogoMark />
         <span className="assistant-launcher__dot" aria-hidden="true" />
-      </button>
+      </div>
     );
   }
 
   return (
-    <main className={`assistant-bubble assistant-bubble--${summary.state}`} style={style}>
+    <main className={`assistant-bubble assistant-bubble--${summary.state}`} data-testid="assistant-bubble" style={style}>
       <header className={`assistant-bubble__header ${onMove ? "assistant-bubble__header--draggable" : ""}`} onPointerDown={headerDragAction(onMove)}>
         <span className="assistant-drag-grip" title={onMove ? "Drag assistant" : undefined} aria-hidden="true">
           <GripVertical size={16} />
@@ -95,9 +102,30 @@ export function AssistantBubbleSurface({
           <b>{summary.title}</b>
           <span>{error || summary.detail}</span>
         </div>
-        <button className="icon-button assistant-collapse-button" title="Minimize to bubble" aria-label="Minimize to bubble" {...buttonAction(onToggleCollapsed)}>
+        <button
+          className="icon-button assistant-collapse-button"
+          data-testid="assistant-collapse"
+          title="Minimize to bubble"
+          aria-label="Minimize to bubble"
+          tabIndex={passiveMode ? -1 : undefined}
+          {...passiveFocusProps}
+          {...buttonAction(onToggleCollapsed)}
+        >
           <Minus className="assistant-collapse-icon" size={16} />
         </button>
+        {onQuit ? (
+          <button
+            className="icon-button"
+            data-testid="assistant-quit"
+            title="Quit"
+            aria-label="Quit"
+            tabIndex={passiveMode ? -1 : undefined}
+            {...passiveFocusProps}
+            {...buttonAction(onQuit)}
+          >
+            <Power size={14} />
+          </button>
+        ) : null}
       </header>
 
       {summary.metrics.length > 0 ? (
@@ -123,7 +151,7 @@ export function AssistantBubbleSurface({
                 <option value="">Select slot</option>
                 {ARTIFACT_SLOT_OPTIONS.map((slot) => (
                   <option key={slot} value={slot}>
-                    {slotLabel(slot)}
+                    {GOOD_SLOT_KEY_TO_LABEL[slot] ?? slot}
                   </option>
                 ))}
               </select>
@@ -140,7 +168,7 @@ export function AssistantBubbleSurface({
                 <option value="">Select main stat</option>
                 {getArtifactMainStatOptions(levelCorrection.slotKey).map((stat) => (
                   <option key={stat} value={stat}>
-                    {statLabel(stat)}
+                    {GOOD_STAT_KEY_TO_LABEL[stat] ?? stat}
                   </option>
                 ))}
               </select>
@@ -158,47 +186,53 @@ export function AssistantBubbleSurface({
               </select>
             </label>
           ) : null}
-          <button className="primary" disabled={!canApplyCorrection(levelCorrection)} {...buttonAction(levelCorrection.onApply)}>
+          <button
+            className="primary"
+            disabled={!canApplyCorrection(levelCorrection)}
+            tabIndex={passiveMode ? -1 : undefined}
+            {...passiveFocusProps}
+            {...buttonAction(levelCorrection.onApply)}
+          >
             Apply
           </button>
         </div>
       ) : null}
 
       <footer className="assistant-actions">
-        <button className="primary" disabled={busy} {...buttonAction(onScan)}>
+        <button className="primary" data-testid="assistant-analyze" disabled={busy} tabIndex={passiveMode ? -1 : undefined} {...passiveFocusProps} {...buttonAction(onScan)}>
           <ScanLine size={15} />
           {busy ? "OCR" : "Analyze"}
         </button>
-        <button className="icon-button" title={watching ? "Stop Watch" : "Watch"} {...buttonAction(onToggleWatch)}>
+        <button className="icon-button" data-testid="assistant-watch" title={watching ? "Stop Watch" : "Watch"} tabIndex={passiveMode ? -1 : undefined} {...passiveFocusProps} {...buttonAction(onToggleWatch)}>
           {watching ? <Square size={15} /> : <Eye size={15} />}
         </button>
-        <button className={`icon-button ${roiAttention ? "assistant-actions__roi--attention" : ""}`} title="Edit ROI" aria-label="Edit ROI" {...buttonAction(onEditRoi)}>
+        <button className={`icon-button ${roiAttention ? "assistant-actions__roi--attention" : ""}`} data-testid="assistant-edit-roi" title="Set the scan area over an artifact detail panel" aria-label="Set Area" tabIndex={passiveMode ? -1 : undefined} {...passiveFocusProps} {...buttonAction(onEditRoi)}>
           <SlidersHorizontal size={15} />
         </button>
-        <button className="icon-button" title={detailsOpen ? "Hide info" : "Show info"} aria-label={detailsOpen ? "Hide info" : "Show info"} aria-expanded={detailsOpen} {...buttonAction(onToggleDetails)}>
+        <button className="icon-button" data-testid="assistant-toggle-details" title={detailsOpen ? "Hide info" : "Show info"} aria-label={detailsOpen ? "Hide info" : "Show info"} aria-expanded={detailsOpen} tabIndex={passiveMode ? -1 : undefined} {...passiveFocusProps} {...buttonAction(onToggleDetails)}>
           <Info size={15} />
         </button>
         {onOpenPanel ? (
-          <button className="icon-button" title="Open Panel" {...buttonAction(onOpenPanel)}>
+          <button className="icon-button" data-testid="assistant-open-panel" title="Open Panel" tabIndex={passiveMode ? -1 : undefined} {...passiveFocusProps} {...buttonAction(onOpenPanel)}>
             <Maximize2 size={15} />
           </button>
         ) : null}
       </footer>
 
       {detailsOpen ? (
-        <div className="assistant-details">
+        <div className="assistant-details" data-testid="assistant-details">
           {summary.details.map((line) => (
             <p key={line}>{line}</p>
           ))}
           {onQuit ? (
             <div className="assistant-details__actions">
               {onResetPosition ? (
-                <button title="Reset assistant position" {...buttonAction(onResetPosition)}>
+                <button title="Reset assistant position" tabIndex={passiveMode ? -1 : undefined} {...passiveFocusProps} {...buttonAction(onResetPosition)}>
                   <RotateCcw size={15} />
                   Reset position
                 </button>
               ) : null}
-              <button className="assistant-quit" {...buttonAction(onQuit)}>
+              <button className="assistant-quit" tabIndex={passiveMode ? -1 : undefined} {...passiveFocusProps} {...buttonAction(onQuit)}>
                 <Power size={15} />
                 Quit
               </button>
@@ -215,6 +249,16 @@ export function AssistantBubbleSurface({
   );
 }
 
+function createPassiveFocusProps() {
+  return {
+    onFocus: (event: FocusEvent<HTMLElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      event.currentTarget.blur();
+    }
+  };
+}
+
 function canApplyCorrection(correction: AssistantLevelCorrection): boolean {
   if (correction.needsSlotKey && !correction.slotKey) {
     return false;
@@ -225,47 +269,37 @@ function canApplyCorrection(correction: AssistantLevelCorrection): boolean {
   return true;
 }
 
-function slotLabel(value: string): string {
-  return ({ flower: "Flower", plume: "Plume", sands: "Sands", goblet: "Goblet", circlet: "Circlet" } as Record<string, string>)[value] ?? value;
-}
-
-function statLabel(value: string): string {
-  return (
-    {
-      hp: "HP",
-      atk: "ATK",
-      hp_: "HP%",
-      atk_: "ATK%",
-      def_: "DEF%",
-      eleMas: "Elemental Mastery",
-      enerRech_: "Energy Recharge",
-      critRate_: "CRIT Rate",
-      critDMG_: "CRIT DMG",
-      pyro_dmg_: "Pyro DMG",
-      hydro_dmg_: "Hydro DMG",
-      electro_dmg_: "Electro DMG",
-      cryo_dmg_: "Cryo DMG",
-      anemo_dmg_: "Anemo DMG",
-      geo_dmg_: "Geo DMG",
-      dendro_dmg_: "Dendro DMG",
-      physical_dmg_: "Physical DMG",
-      heal_: "Healing Bonus"
-    } as Record<string, string>
-  )[value] ?? value;
-}
-
 function useLauncherGesture(toggle: () => void, move?: () => void) {
-  const gesture = useRef<{ pointerId: number; x: number; y: number; dragging: boolean } | null>(null);
+  const gesture = useRef<{ pointerId: number; x: number; y: number; dragging: boolean; toggled: boolean } | null>(null);
   return {
-    onPointerDown: (event: PointerEvent<HTMLButtonElement>) => {
+    onPointerDown: (event: PointerEvent<HTMLElement>) => {
       if (event.button !== 0) {
         return;
       }
       event.preventDefault();
       event.currentTarget.setPointerCapture(event.pointerId);
-      gesture.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, dragging: false };
+      gesture.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, dragging: false, toggled: false };
     },
-    onPointerMove: (event: PointerEvent<HTMLButtonElement>) => {
+    onMouseDown: (event: MouseEvent<HTMLElement>) => {
+      if (event.button !== 0) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+    },
+    onMouseUp: (event: MouseEvent<HTMLElement>) => {
+      if (event.button !== 0) {
+        return;
+      }
+      const current = gesture.current;
+      if (current && !current.dragging && !current.toggled) {
+        event.preventDefault();
+        event.stopPropagation();
+        current.toggled = true;
+        toggle();
+      }
+    },
+    onPointerMove: (event: PointerEvent<HTMLElement>) => {
       const current = gesture.current;
       if (!current || current.pointerId !== event.pointerId || current.dragging || !move) {
         return;
@@ -281,10 +315,12 @@ function useLauncherGesture(toggle: () => void, move?: () => void) {
       }
       move();
     },
-    onPointerUp: (event: PointerEvent<HTMLButtonElement>) => {
+    onPointerUp: (event: PointerEvent<HTMLElement>) => {
       const current = gesture.current;
-      gesture.current = null;
-      if (current && !current.dragging) {
+      if (current && !current.dragging && !current.toggled) {
+        event.preventDefault();
+        event.stopPropagation();
+        current.toggled = true;
         toggle();
       }
     },
@@ -308,19 +344,40 @@ function headerDragAction(move?: () => void) {
 function AssistantLogoMark() {
   return (
     <span className="assistant-logo-mark" aria-hidden="true">
-      <Gem className="assistant-logo-mark__gem" size={29} />
-      <ScanLine className="assistant-logo-mark__scan" size={15} />
+      <svg viewBox="0 0 64 64" className="assistant-logo-mark__icon" width="100%" height="100%">
+        <defs>
+          <linearGradient id="logo-ring" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="#f6e182"/>
+            <stop offset="100%" stopColor="#d39d43"/>
+          </linearGradient>
+          <radialGradient id="logo-core">
+            <stop offset="0%" stopColor="#e6f3ff"/>
+            <stop offset="50%" stopColor="#8ec5ff"/>
+            <stop offset="100%" stopColor="#5299d1"/>
+          </radialGradient>
+        </defs>
+        <circle cx="32" cy="32" r="29" fill="none" stroke="url(#logo-ring)" strokeWidth="3.5"/>
+        <path d="M32 11 Q40 24 53 32 Q40 40 32 53 Q24 40 11 32 Q24 24 32 11 Z" fill="url(#logo-ring)" opacity="0.92"/>
+        <circle cx="32" cy="32" r="4" fill="url(#logo-core)"/>
+        <circle cx="31" cy="31" r="1.5" fill="#fff" opacity="0.35"/>
+      </svg>
     </span>
   );
 }
 
 function buttonAction(action: () => void) {
   return {
-    onPointerDown: (event: PointerEvent<HTMLButtonElement>) => {
+    onMouseDown: (event: MouseEvent<HTMLButtonElement>) => {
       if (event.button !== 0) {
         return;
       }
-
+      event.preventDefault();
+      event.stopPropagation();
+    },
+    onMouseUp: (event: MouseEvent<HTMLButtonElement>) => {
+      if (event.button !== 0) {
+        return;
+      }
       event.preventDefault();
       event.stopPropagation();
       action();
@@ -330,7 +387,7 @@ function buttonAction(action: () => void) {
 }
 
 function keyboardAction(action: () => void) {
-  return (event: KeyboardEvent<HTMLButtonElement>) => {
+  return (event: KeyboardEvent<HTMLElement>) => {
     if (event.key !== "Enter" && event.key !== " ") {
       return;
     }

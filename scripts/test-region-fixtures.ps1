@@ -6,7 +6,7 @@ $bagRegion = '{\"x\":0.68125,\"y\":0.1,\"width\":0.2572916667,\"height\":0.80166
 
 $fixtures = @(
     @{
-        Name = "GenshinImpact_lKJAl1Pymu.jpg"
+        Name = "character-detail-plus20.jpg"
         Region = $characterRegion
         SetKey = "CelestialGift"
         SlotKey = "sands"
@@ -17,7 +17,7 @@ $fixtures = @(
         Unactivated = 0
     },
     @{
-        Name = "GenshinImpact_oXNqhIZyXT.jpg"
+        Name = "character-detail-unactivated.jpg"
         Region = $characterRegion
         SetKey = "CelestialGift"
         SlotKey = "sands"
@@ -28,7 +28,7 @@ $fixtures = @(
         Unactivated = 1
     },
     @{
-        Name = "ArtifactsInventory1_8x5 - weight 0.png"
+        Name = "bag-card-plus20.png"
         Region = $bagRegion
         SetKey = "CelestialGift"
         SlotKey = "flower"
@@ -39,7 +39,7 @@ $fixtures = @(
         Unactivated = 0
     },
     @{
-        Name = "ArtifactsInventory40_8x5 - weight 0.png"
+        Name = "bag-card-royal-unactivated.png"
         Region = $bagRegion
         SetKey = "NoblesseOblige"
         SlotKey = "flower"
@@ -50,7 +50,7 @@ $fixtures = @(
         Unactivated = 1
     },
     @{
-        Name = "ArtifactsInventory45_8x5 - weight 0.png"
+        Name = "bag-card-4star.png"
         Region = $bagRegion
         SetKey = "Instructor"
         SlotKey = "plume"
@@ -61,7 +61,7 @@ $fixtures = @(
         Unactivated = 0
     },
     @{
-        Name = "GenshinImpact_3star.png"
+        Name = "bag-card-3star.png"
         Region = $bagRegion
         SetKey = "TravelingDoctor"
         SlotKey = "plume"
@@ -72,7 +72,7 @@ $fixtures = @(
         Unactivated = 0
     },
     @{
-        Name = "GenshinImpact_2star.jpg"
+        Name = "bag-card-2star.jpg"
         Region = $bagRegion
         SetKey = "Adventurer"
         SlotKey = "plume"

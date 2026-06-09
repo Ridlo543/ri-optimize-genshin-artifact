@@ -91,6 +91,25 @@ test("assistant bubble ignores stale watch, scanning, and previous OCR result on
   await expect(page.getByRole("button", { name: "Analyze" })).toBeEnabled();
 });
 
+test("assistant expanded bubble controls respond through stable DOM selectors", async ({ page }) => {
+  await page.goto("/?window=assistant-bubble");
+
+  await page.getByTestId("assistant-launcher").click();
+  await expect(page.getByTestId("assistant-bubble")).toBeVisible();
+
+  await page.getByTestId("assistant-toggle-details").click();
+  await expect(page.getByTestId("assistant-details")).toBeVisible();
+
+  await page.getByTestId("assistant-toggle-details").click();
+  await expect(page.getByTestId("assistant-details")).toHaveCount(0);
+
+  await page.getByTestId("assistant-watch").click();
+  await expect.poll(() => page.evaluate(() => window.localStorage.getItem("ri-genshin.assistant.watch.enabled.v1"))).toBe("true");
+
+  await page.getByTestId("assistant-watch").click();
+  await expect.poll(() => page.evaluate(() => window.localStorage.getItem("ri-genshin.assistant.watch.enabled.v1"))).toBe("false");
+});
+
 test("assistant collapsed launcher fits a high-DPI shrunken viewport", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 48, height: 48 });
   await page.goto("/?window=assistant-bubble");

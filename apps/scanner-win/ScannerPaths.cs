@@ -103,6 +103,12 @@ internal static class ScannerPaths
             return outputTessdata;
         }
 
+        string bundledResourceTessdata = Path.Combine(AppContext.BaseDirectory, "resources", "tessdata");
+        if (Directory.Exists(bundledResourceTessdata))
+        {
+            return bundledResourceTessdata;
+        }
+
         string projectTessdata = Path.Combine("apps", "scanner-win", "tessdata");
         if (Directory.Exists(projectTessdata))
         {

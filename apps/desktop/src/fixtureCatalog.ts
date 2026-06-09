@@ -40,8 +40,8 @@ export const FIXTURE_PLAYGROUND_ENTRIES: FixturePlaygroundEntry[] = [
   {
     key: "character-plus20",
     label: "Character +20",
-    fileName: "GenshinImpact_lKJAl1Pymu.jpg",
-    imageUrl: fixtureImageUrl("GenshinImpact_lKJAl1Pymu.jpg"),
+    fileName: "character-detail-plus20.jpg",
+    imageUrl: fixtureImageUrl("character-detail-plus20.jpg"),
     region: CHARACTER_PANEL_REGION,
     fallbackArtifact: {
       setKey: "CelestialGift",
@@ -63,8 +63,8 @@ export const FIXTURE_PLAYGROUND_ENTRIES: FixturePlaygroundEntry[] = [
   {
     key: "character-unactivated",
     label: "Character unactivated",
-    fileName: "GenshinImpact_oXNqhIZyXT.jpg",
-    imageUrl: fixtureImageUrl("GenshinImpact_oXNqhIZyXT.jpg"),
+    fileName: "character-detail-unactivated.jpg",
+    imageUrl: fixtureImageUrl("character-detail-unactivated.jpg"),
     region: CHARACTER_PANEL_REGION,
     fallbackArtifact: {
       setKey: "CelestialGift",
@@ -85,8 +85,8 @@ export const FIXTURE_PLAYGROUND_ENTRIES: FixturePlaygroundEntry[] = [
   {
     key: "bag-plus20",
     label: "Bag +20",
-    fileName: "ArtifactsInventory1_8x5 - weight 0.png",
-    imageUrl: fixtureImageUrl("ArtifactsInventory1_8x5 - weight 0.png"),
+    fileName: "bag-card-plus20.png",
+    imageUrl: fixtureImageUrl("bag-card-plus20.png"),
     region: BAG_CARD_REGION,
     fallbackArtifact: {
       setKey: "CelestialGift",
@@ -108,8 +108,8 @@ export const FIXTURE_PLAYGROUND_ENTRIES: FixturePlaygroundEntry[] = [
   {
     key: "bag-royal-unactivated",
     label: "Bag Royal unactivated",
-    fileName: "ArtifactsInventory40_8x5 - weight 0.png",
-    imageUrl: fixtureImageUrl("ArtifactsInventory40_8x5 - weight 0.png"),
+    fileName: "bag-card-royal-unactivated.png",
+    imageUrl: fixtureImageUrl("bag-card-royal-unactivated.png"),
     region: BAG_CARD_REGION,
     fallbackArtifact: {
       setKey: "NoblesseOblige",
@@ -130,8 +130,8 @@ export const FIXTURE_PLAYGROUND_ENTRIES: FixturePlaygroundEntry[] = [
   {
     key: "bag-4star",
     label: "Bag 4-star",
-    fileName: "ArtifactsInventory45_8x5 - weight 0.png",
-    imageUrl: fixtureImageUrl("ArtifactsInventory45_8x5 - weight 0.png"),
+    fileName: "bag-card-4star.png",
+    imageUrl: fixtureImageUrl("bag-card-4star.png"),
     region: BAG_CARD_REGION,
     fallbackArtifact: {
       setKey: "Instructor",
@@ -151,8 +151,8 @@ export const FIXTURE_PLAYGROUND_ENTRIES: FixturePlaygroundEntry[] = [
   {
     key: "bag-3star",
     label: "Bag 3-star",
-    fileName: "GenshinImpact_3star.png",
-    imageUrl: fixtureImageUrl("GenshinImpact_3star.png"),
+    fileName: "bag-card-3star.png",
+    imageUrl: fixtureImageUrl("bag-card-3star.png"),
     region: BAG_CARD_REGION,
     fallbackArtifact: {
       setKey: "TravelingDoctor",
@@ -169,8 +169,8 @@ export const FIXTURE_PLAYGROUND_ENTRIES: FixturePlaygroundEntry[] = [
   {
     key: "bag-2star",
     label: "Bag 2-star",
-    fileName: "GenshinImpact_2star.jpg",
-    imageUrl: fixtureImageUrl("GenshinImpact_2star.jpg"),
+    fileName: "bag-card-2star.jpg",
+    imageUrl: fixtureImageUrl("bag-card-2star.jpg"),
     region: BAG_CARD_REGION,
     fallbackArtifact: {
       setKey: "Adventurer",

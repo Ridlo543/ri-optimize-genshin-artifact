@@ -31,12 +31,17 @@
 - `pnpm scanner:screenshots` parses OCR-ready full screenshot fixtures and classifies the 1280x800 grid-only fixture as non-ready.
 - `pnpm scanner:classify` classifies the current live Genshin screen without running OCR.
 - `scan-region-artifact --region-json <json>` is the primary live scanner command for the overlay UI.
+- Release/dev scanner packaging regression is covered manually with:
+  - `apps/desktop/src-tauri/binaries/scanner-publish/GenshinArtifactScanner.Win.exe ocr-substats <absolute-image-path>`
+  - This must succeed in the published scanner folder, not only in `bin/Debug`, because the old single-file publish path failed with `Value cannot be null. (Parameter 'path1')` during OCR initialization.
 - `pnpm --filter @ri-genshin/artifact-schema test` covers GOOD normalization and scanner confidence trust policy.
 - `pnpm --filter @ri-genshin/desktop test` covers compact assistant summary formatting, trust blocking, manual level correction, fixture catalog ROI validation, and bubble placement.
 - `pnpm --filter @ri-genshin/desktop test` covers compact assistant summary formatting, trust blocking, manual OCR correction for level/slot/main stat, fixture catalog ROI validation, and bubble placement.
 - `pnpm --filter @ri-genshin/desktop test:e2e` covers root transparency, launcher shape, expanded bubble styling, fixture ROI resize/lock, real metric tooltips, and main-panel horizontal overflow.
+- `pnpm --filter @ri-genshin/desktop test:e2e -- --grep "assistant expanded bubble controls respond through stable DOM selectors"` covers expanded bubble inner controls through stable DOM selectors instead of coordinate guesses.
 - `pnpm --filter @ri-genshin/desktop test:e2e -- e2e/window-flow.spec.ts` also covers collapsed click-versus-drag behavior, expanded bubble minimize, accessible metric explanations, the collapsed logo mark, and Import loading of `artifact-samples.json`.
-- `pnpm tauri:smoke` covers native startup visibility, DPI-aware bubble sizing, topmost state, expansion, and foreground-focus preservation for bubble/passive-main clicks. If Genshin is running, it explicitly brings Genshin forward and verifies its PID remains foreground.
+- `pnpm tauri:smoke` covers native startup visibility, DPI-aware bubble sizing, topmost state, bubble expansion, hidden main/ROI windows, and foreground-focus preservation for launcher clicks. If Genshin is running, it explicitly brings Genshin forward and verifies its PID remains foreground.
+- Coordinate-driven native smoke is intentionally a bad fit for tiny inner WebView controls such as the expanded bubble action row. Use Playwright selector-driven tests for inner bubble controls, and keep native smoke focused on windowing/focus behavior only.
 - Native Tauri UI can run the same fixture OCR from the toolbar screenshot selector.
 
 ## Offline Fixture Playground
@@ -99,5 +104,42 @@
 - Run `pnpm --filter @ri-genshin/desktop tauri build` from the repo root.
 - The Tauri build uses `apps/desktop/src-tauri/tauri.conf.json` and runs `beforeBuildCommand="pnpm build:tauri"` automatically.
 - `pnpm build:tauri` builds the desktop frontend and runs `pnpm --dir ../.. scanner:publish:tauri`, which publishes the C# scanner sidecar into `apps/desktop/src-tauri/binaries`.
+- The scanner publish step now uses a self-contained non-single-file folder under `apps/desktop/src-tauri/binaries/scanner-publish/`. This replaced the previous single-file sidecar packaging because the single-file scanner could classify screens but crashed as soon as OCR started.
 - Windows MSI/NSIS bundling requires `apps/desktop/src-tauri/icons/icon.ico` to be listed in `bundle.icon`.
 - Release artifacts are written under `apps/desktop/src-tauri/target/release/`; bundled installers live under `apps/desktop/src-tauri/target/release/bundle/`.
+
+### Practical Commands
+
+- Build frontend + publish scanner sidecar only:
+  - `pnpm --filter @ri-genshin/desktop build:tauri`
+- Build full Windows installers:
+  - `pnpm --filter @ri-genshin/desktop tauri build`
+
+### Installer Output
+
+Expected installer output paths:
+
+- `apps/desktop/src-tauri/target/release/bundle/nsis/Genshin Artifact Assistant_0.1.0_x64-setup.exe`
+- `apps/desktop/src-tauri/target/release/bundle/msi/Genshin Artifact Assistant_0.1.0_x64_en-US.msi`
+
+### Uninstall
+
+Uninstall is already provided by the generated Windows installer packages.
+
+Typical uninstall paths:
+
+- Windows Settings -> Apps -> Installed apps -> `Genshin Artifact Assistant` -> Uninstall
+- Control Panel -> Programs and Features -> `Genshin Artifact Assistant` -> Uninstall
+
+For MSI, you can also uninstall manually with:
+
+```powershell
+msiexec /x "apps/desktop/src-tauri/target/release/bundle/msi/Genshin Artifact Assistant_0.1.0_x64_en-US.msi"
+```
+
+### Release Packaging Notes
+
+- The scanner runtime is bundled through `bundle.resources` in `apps/desktop/src-tauri/tauri.conf.json` as the full `binaries/scanner-publish/` folder.
+- The sidecar publish step is handled by `scripts/publish-scanner-sidecar.ps1`.
+- The current release path uses the published scanner folder and launches `binaries/scanner-publish/GenshinArtifactScanner.Win.exe` from the app resource directory at runtime.
+- If the installed app shows `scanner idle`, `Scanner status unavailable`, or `Unable to open ROI editor`, verify the build was produced after running the current `scanner:publish:tauri` script and reinstall the newly built installer.

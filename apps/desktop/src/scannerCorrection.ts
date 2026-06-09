@@ -69,6 +69,12 @@ export interface ScannerCorrections {
   mainStatKey?: ArtifactMainStatCorrectionSelection;
 }
 
+export interface InitialScannerCorrections {
+  level: number;
+  slotKey: ArtifactSlotCorrectionSelection;
+  mainStatKey: ArtifactMainStatCorrectionSelection;
+}
+
 export function getLevelCorrectionState(result: ScannerArtifactResult | null): LevelCorrectionState {
   const correction = getScannerCorrectionState(result);
   if (!correction.available || correction.missingFields.length !== 1 || !correction.needsLevel) {
@@ -117,6 +123,24 @@ export function getScannerCorrectionState(result: ScannerArtifactResult | null):
     needsLevel: missingFields.includes("level"),
     needsSlotKey: missingFields.includes("slotKey"),
     needsMainStatKey: missingFields.includes("mainStatKey")
+  };
+}
+
+export function getInitialScannerCorrections(result: ScannerArtifactResult | null): InitialScannerCorrections {
+  if (!result?.artifactDraft || result.artifact) {
+    return {
+      level: 0,
+      slotKey: "",
+      mainStatKey: ""
+    };
+  }
+
+  const slotKey = isValidSlot(result.artifactDraft.slotKey) ? result.artifactDraft.slotKey : "";
+  const mainStatKey = isValidMainStat(result.artifactDraft.mainStatKey) ? result.artifactDraft.mainStatKey : "";
+  return {
+    level: isValidLevel(result.artifactDraft.level) ? result.artifactDraft.level : 0,
+    slotKey,
+    mainStatKey: slotKey && mainStatKey && !isValidMainStatForSlot(slotKey, mainStatKey) ? "" : mainStatKey
   };
 }
 

@@ -87,4 +87,32 @@ public sealed class ArtifactTextParserTests
 
         level.Should().BeNull();
     }
+
+    [TestMethod]
+    [DataRow("Plume of Death", "plume")]
+    [DataRow("pumeorDean", "plume")]
+    [DataRow("pume or Dean", "plume")]
+    [DataRow("Cone of Eonathem", "goblet")]
+    [DataRow("coneeonathem", "goblet")]
+    [DataRow("Goblet of Eonothem", "goblet")]
+    [DataRow("Flower of Life", "flower")]
+    [DataRow("Sands of Eon", "sands")]
+    [DataRow("Circlet of Logos", "circlet")]
+    public void ParseSlotKey_FuzzyMatchesNoisyOcr(string text, string expected)
+    {
+        string? slot = ArtifactTextParser.ParseSlotKey(text);
+
+        slot.Should().Be(expected);
+    }
+
+    [TestMethod]
+    [DataRow("xyzabc123")]
+    [DataRow("randomgarbage")]
+    [DataRow("")]
+    public void ParseSlotKey_RejectsGibberish(string text)
+    {
+        string? slot = ArtifactTextParser.ParseSlotKey(text);
+
+        slot.Should().BeNull();
+    }
 }

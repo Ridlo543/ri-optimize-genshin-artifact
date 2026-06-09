@@ -1,6 +1,7 @@
 import { isNormalizedScanRegion, ScanRegion, ScannerArtifactResult } from "@ri-genshin/artifact-schema";
 
 const ROI_KEY = "ri-genshin.roi.region";
+const ROI_EDITING_KEY = "ri-genshin.roi.editing";
 const LATEST_RESULT_KEY = "ri-genshin.scanner.latestResult";
 const LATEST_RESULT_REVISION_KEY = "ri-genshin.scanner.latestResultRevision";
 const LATEST_RESULT_EVENT = "ri-genshin-scanner-result";
@@ -33,10 +34,22 @@ export function saveScanRegion(region: ScanRegion): void {
   window.localStorage.setItem(ROI_KEY, JSON.stringify(region));
 }
 
+export function loadRoiEditingState(): boolean {
+  return window.localStorage.getItem(ROI_EDITING_KEY) === "true";
+}
+
+export function saveRoiEditingState(editing: boolean): void {
+  window.localStorage.setItem(ROI_EDITING_KEY, editing ? "true" : "false");
+}
+
 export function loadLatestScannerResult(): ScannerArtifactResult | null {
   try {
     const raw = window.localStorage.getItem(LATEST_RESULT_KEY);
-    return raw ? (JSON.parse(raw) as ScannerArtifactResult) : null;
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw) as unknown;
+    return isScannerArtifactResult(parsed) ? parsed : null;
   } catch {
     return null;
   }
@@ -77,4 +90,12 @@ function createResultRevision(result: ScannerArtifactResult): string {
     capture.capturedAt,
     result.mode
   ].filter(Boolean).join("|") || `${Date.now()}`;
+}
+
+function isScannerArtifactResult(value: unknown): value is ScannerArtifactResult {
+  return isRecord(value) && isRecord(value.capture) && isRecord(value.confidence) && typeof value.mode === "string" && typeof value.source === "string";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }

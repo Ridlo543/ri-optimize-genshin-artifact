@@ -61,11 +61,11 @@ export const VALID_MAIN_STATS_BY_PIECE: Record<ArtifactPiece, StatType[]> = {
   ]
 };
 
-export const ARTIFACT_MAX_LEVEL_BY_RARITY: Record<ArtifactRarity, ArtifactLevel> = {
-  2: 4,
-  3: 12,
-  4: 16,
-  5: 20
+export const ROLL_VALUE_WEIGHTS_BY_RARITY: Record<number, number[]> = {
+  2: [3, 2, 1],
+  3: [7, 5, 3, 1],
+  4: [7, 5, 3, 1],
+  5: [7, 5, 3, 1]
 };
 
 export const MINOR_ROLL_VALUES_BY_RARITY: Record<ArtifactRarity, Record<StatType, number[] | undefined>> = {

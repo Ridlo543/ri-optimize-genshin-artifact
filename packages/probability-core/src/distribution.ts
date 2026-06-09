@@ -1,5 +1,5 @@
 import { ArtifactInput, ArtifactLevel, ArtifactRarity, StatType } from "@ri-genshin/artifact-schema";
-import { MINOR_AFFIX_WEIGHTS, MINOR_ROLL_VALUES_BY_RARITY, MINOR_STATS, UPGRADE_MILESTONES_BY_RARITY } from "./constants";
+import { MINOR_AFFIX_WEIGHTS, MINOR_ROLL_VALUES_BY_RARITY, MINOR_STATS, ROLL_VALUE_WEIGHTS_BY_RARITY, UPGRADE_MILESTONES_BY_RARITY } from "./constants";
 
 export interface WeightedStat {
   stat: StatType;
@@ -29,6 +29,15 @@ export function getRollValues(stat: StatType, rarity: ArtifactRarity): number[] 
     throw new Error(`No minor roll values for ${rarity}-star ${stat}.`);
   }
   return values;
+}
+
+export function getRollValueProbabilities(rarity: ArtifactRarity): number[] {
+  const weights = ROLL_VALUE_WEIGHTS_BY_RARITY[rarity] ?? ROLL_VALUE_WEIGHTS_BY_RARITY[5];
+  if (!weights) {
+    return [1];
+  }
+  const totalWeight = weights.reduce((sum, w) => sum + w, 0);
+  return weights.map((w) => w / totalWeight);
 }
 
 export function getRemainingMilestones(level: ArtifactInput["level"], rarity: ArtifactRarity = 5): ArtifactLevel[] {

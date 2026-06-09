@@ -43,6 +43,15 @@ public sealed class ArtifactRegionParserTests
         Unit = "normalized-client"
     };
 
+    private static readonly ScanRegion DefaultLiveRegion = new()
+    {
+        X = 0.68,
+        Y = 0.1,
+        Width = 0.27,
+        Height = 0.8,
+        Unit = "normalized-client"
+    };
+
     [TestMethod]
     public void ParseFile_BagCardRegionReadsArtifact()
     {
@@ -62,6 +71,24 @@ public sealed class ArtifactRegionParserTests
         artifact.MainStatKey.Should().Be("hp");
         artifact.Level.Should().Be(20);
         artifact.Substats.Should().ContainEquivalentOf(new GoodSubstat { Key = "critRate_", Value = 10.5m });
+    }
+
+    [TestMethod]
+    public void ParseFile_LiveScreenshotReplay_DoesNotThrow()
+    {
+        string screenshotPath = Path.Combine(ScannerPaths.FindRepoRoot(), "logs", "scanner", "region-source-last.png");
+        if (!File.Exists(screenshotPath))
+        {
+            Assert.Inconclusive($"Live screenshot replay file was not found: {screenshotPath}");
+        }
+
+        using OcrTextReader reader = new();
+        ArtifactOcrService service = new(reader);
+        ArtifactRegionParser parser = new(service);
+
+        Action action = () => parser.ParseFile(screenshotPath, DefaultLiveRegion, writeDebugImage: true);
+
+        action.Should().NotThrow();
     }
 
     [TestMethod]
@@ -106,7 +133,7 @@ public sealed class ArtifactRegionParserTests
         ArtifactOcrService service = new(reader);
         ArtifactRegionParser parser = new(service);
 
-        ScanResult result = parser.ParseFile(ScannerPaths.FindScreenshotFixture("GenshinImpact_lKJAl1Pymu.jpg"), CharacterPanelRegion);
+        ScanResult result = parser.ParseFile(ScannerPaths.FindScreenshotFixture("character-detail-plus20.jpg"), CharacterPanelRegion);
 
         result.Error.Should().BeNull();
         result.Capture.Layout.Should().Be("roi-character-panel");
@@ -127,7 +154,7 @@ public sealed class ArtifactRegionParserTests
         ArtifactOcrService service = new(reader);
         ArtifactRegionParser parser = new(service);
 
-        ScanResult result = parser.ParseFile(ScannerPaths.FindScreenshotFixture("GenshinImpact_oXNqhIZyXT.jpg"), CharacterPanelRegion);
+        ScanResult result = parser.ParseFile(ScannerPaths.FindScreenshotFixture("character-detail-unactivated.jpg"), CharacterPanelRegion);
 
         result.Error.Should().BeNull();
         result.Artifact.Should().NotBeNull();
@@ -142,7 +169,7 @@ public sealed class ArtifactRegionParserTests
         ArtifactOcrService service = new(reader);
         ArtifactRegionParser parser = new(service);
 
-        ScanResult result = parser.ParseFile(ScannerPaths.FindScreenshotFixture("ArtifactsInventory1_8x5 - weight 0.png"), BagCardRegion);
+        ScanResult result = parser.ParseFile(ScannerPaths.FindScreenshotFixture("bag-card-plus20.png"), BagCardRegion);
 
         result.Error.Should().BeNull();
         result.Capture.Layout.Should().Be("roi-bag-card");
@@ -162,7 +189,7 @@ public sealed class ArtifactRegionParserTests
         ArtifactOcrService service = new(reader);
         ArtifactRegionParser parser = new(service);
 
-        ScanResult result = parser.ParseFile(ScannerPaths.FindScreenshotFixture("ArtifactsInventory40_8x5 - weight 0.png"), BagCardRegion);
+        ScanResult result = parser.ParseFile(ScannerPaths.FindScreenshotFixture("bag-card-royal-unactivated.png"), BagCardRegion);
 
         result.Error.Should().BeNull();
         result.Capture.Layout.Should().Be("roi-bag-card");
@@ -184,7 +211,7 @@ public sealed class ArtifactRegionParserTests
         using OcrTextReader reader = new();
         ArtifactOcrService service = new(reader);
         ArtifactRegionParser parser = new(service);
-        using Bitmap screenshot = new(ScannerPaths.FindScreenshotFixture("ArtifactsInventory40_8x5 - weight 0.png"));
+        using Bitmap screenshot = new(ScannerPaths.FindScreenshotFixture("bag-card-royal-unactivated.png"));
         Rectangle card = ScanRegionParser.ToRectangle(BagCardRegion, screenshot);
         using (Graphics graphics = Graphics.FromImage(screenshot))
         {
@@ -210,7 +237,7 @@ public sealed class ArtifactRegionParserTests
         ArtifactOcrService service = new(reader);
         ArtifactRegionParser parser = new(service);
 
-        ScanResult result = parser.ParseFile(ScannerPaths.FindScreenshotFixture("ArtifactsInventory45_8x5 - weight 0.png"), BagCardRegion);
+        ScanResult result = parser.ParseFile(ScannerPaths.FindScreenshotFixture("bag-card-4star.png"), BagCardRegion);
 
         result.Error.Should().BeNull();
         result.Capture.Layout.Should().Be("roi-bag-card");
@@ -232,7 +259,7 @@ public sealed class ArtifactRegionParserTests
         ArtifactOcrService service = new(reader);
         ArtifactRegionParser parser = new(service);
 
-        ScanResult result = parser.ParseFile(ScannerPaths.FindScreenshotFixture("GenshinImpact_2star.jpg"), BagCardRegion);
+        ScanResult result = parser.ParseFile(ScannerPaths.FindScreenshotFixture("bag-card-2star.jpg"), BagCardRegion);
 
         result.Error.Should().BeNull();
         result.Capture.Layout.Should().Be("roi-bag-card");
@@ -254,7 +281,7 @@ public sealed class ArtifactRegionParserTests
         ArtifactOcrService service = new(reader);
         ArtifactRegionParser parser = new(service);
 
-        ScanResult result = parser.ParseFile(ScannerPaths.FindScreenshotFixture("GenshinImpact_3star.png"), BagCardRegion);
+        ScanResult result = parser.ParseFile(ScannerPaths.FindScreenshotFixture("bag-card-3star.png"), BagCardRegion);
 
         result.Error.Should().BeNull();
         result.Capture.Layout.Should().Be("roi-bag-card");
@@ -497,7 +524,7 @@ public sealed class ArtifactRegionParserTests
         ArtifactOcrService service = new(reader);
         ArtifactRegionParser parser = new(service);
 
-        ScanResult result = parser.ParseFile(GetRepoFilePath("data", "log-manual", "bug_new4", "GenshinImpact_d6QhwtaXj4.jpg"), LockedBagRoiRegion);
+        ScanResult result = parser.ParseFile(GetRepoFilePath("data", "log-manual", "bug_new_4", "GenshinImpact_d6QhwtaXj4.jpg"), LockedBagRoiRegion);
 
         result.Error.Should().BeNull();
         result.Capture.Layout.Should().Be("roi-bag-card");
@@ -583,6 +610,201 @@ public sealed class ArtifactRegionParserTests
 
         result.ScreenState.Should().NotBeNull();
         result.ScreenState!.Code.Should().NotBe(ScreenStateCodes.ArtifactBagDetail);
+    }
+
+    [TestMethod]
+    public void ParseFile_CharacterDetailScreenshotFallbackWouldWork()
+    {
+        // bug_new_3/YoOztRYUjI.jpg is a character-detail panel that fails with the
+        // default live region (positioned for bag cards) but succeeds with the
+        // full-screenshot parser. This test proves the fallback in ScanRegionArtifact
+        // would rescue the scan when the ROI-based approach misses critical fields.
+        using OcrTextReader reader = new();
+        ArtifactOcrService service = new(reader);
+
+        // Verify: region parser with wrong ROI returns missing fields
+        ArtifactRegionParser regionParser = new(service);
+        ScanResult regionResult = regionParser.ParseFile(
+            GetRepoFilePath("data", "log-manual", "bug_new_3", "GenshinImpact_YoOztRYUjI.jpg"),
+            new ScanRegion
+            {
+                X = 0.68, Y = 0.1, Width = 0.27, Height = 0.8, Unit = "normalized-client"
+            });
+
+        // The ROI-based parse should detect a character panel but miss slot/main stat
+        regionResult.Capture.Layout.Should().MatchRegex("roi-character-panel.*");
+        regionResult.MissingFields.Should().Contain("slotKey").And.Contain("mainStatKey");
+
+        // Verify: screenshot parser with absolute coordinates reads all fields
+        ScreenshotArtifactParser screenshotParser = new(service);
+        ScanResult screenshotResult = screenshotParser.ParseFile(
+            GetRepoFilePath("data", "log-manual", "bug_new_3", "GenshinImpact_YoOztRYUjI.jpg"));
+
+        screenshotResult.Error.Should().BeNull();
+        screenshotResult.Artifact.Should().NotBeNull();
+        screenshotResult.Artifact!.SlotKey.Should().Be("sands");
+        screenshotResult.Artifact.MainStatKey.Should().Be("atk_");
+        screenshotResult.MissingFields.Should().BeEmpty();
+    }
+
+    [TestMethod]
+    public void ParseFile_CharacterDetailWithCorrectRegionReadsAllFields()
+    {
+        // The same character-detail fixture succeeds when the correct ROI is used.
+        using OcrTextReader reader = new();
+        ArtifactOcrService service = new(reader);
+        ArtifactRegionParser parser = new(service);
+
+        ScanResult result = parser.ParseFile(
+            GetRepoFilePath("data", "log-manual", "bug_new_3", "GenshinImpact_YoOztRYUjI.jpg"),
+            new ScanRegion
+            {
+                X = 1452.0 / 1920.0,
+                Y = 90.0 / 1200.0,
+                Width = 466.0 / 1920.0,
+                Height = 1000.0 / 1200.0,
+                Unit = "normalized-client"
+            });
+
+        result.Error.Should().BeNull();
+        result.Capture.Layout.Should().StartWith("roi-character-panel");
+        result.Artifact.Should().NotBeNull();
+        GoodArtifact artifact = result.Artifact!;
+        artifact.SlotKey.Should().Be("sands");
+        artifact.MainStatKey.Should().Be("atk_");
+        artifact.Level.Should().Be(0);
+        artifact.Substats.Should().HaveCount(3);
+        artifact.UnactivatedSubstats.Should().ContainSingle();
+    }
+
+    [TestMethod]
+    public void ParseFile_ManualBagDefGobletReadsArtifact()
+    {
+        using OcrTextReader reader = new();
+        ArtifactOcrService service = new(reader);
+        ArtifactRegionParser parser = new(service);
+
+        ScanResult result = parser.ParseFile(
+            GetRepoFilePath("data", "log-manual", "bug_new_3", "GenshinImpact_B79dTeO1B3.jpg"),
+            BagCardRegion);
+
+        result.Error.Should().BeNull();
+        result.Capture.Layout.Should().Be("roi-bag-card");
+        result.Artifact.Should().NotBeNull();
+        GoodArtifact artifact = result.Artifact!;
+        artifact.SlotKey.Should().Be("goblet");
+        artifact.MainStatKey.Should().Be("def_");
+        artifact.Level.Should().Be(20);
+        artifact.Substats.Should().HaveCount(4);
+    }
+
+    [TestMethod]
+    public void ParseFile_ManualBagAtkSandsReadsArtifact()
+    {
+        using OcrTextReader reader = new();
+        ArtifactOcrService service = new(reader);
+        ArtifactRegionParser parser = new(service);
+
+        ScanResult result = parser.ParseFile(
+            GetRepoFilePath("data", "log-manual", "bug_new_3", "GenshinImpact_S6f5iqBq6i.jpg"),
+            BagCardRegion);
+
+        result.Error.Should().BeNull();
+        result.Capture.Layout.Should().Be("roi-bag-card");
+        result.Artifact.Should().NotBeNull();
+        GoodArtifact artifact = result.Artifact!;
+        artifact.SlotKey.Should().Be("sands");
+        artifact.MainStatKey.Should().Be("atk_");
+        artifact.Level.Should().Be(20);
+        artifact.Substats.Should().HaveCount(4);
+    }
+
+    [TestMethod]
+    public void ParseFile_ManualBagInstructorPlumeReadsArtifact()
+    {
+        using OcrTextReader reader = new();
+        ArtifactOcrService service = new(reader);
+        ArtifactRegionParser parser = new(service);
+
+        ScanResult result = parser.ParseFile(
+            GetRepoFilePath("data", "log-manual", "bug_new_3", "GenshinImpact_It8PONhJGN.jpg"),
+            BagCardRegion);
+
+        result.Error.Should().BeNull();
+        result.Capture.Layout.Should().Be("roi-bag-card");
+        result.Artifact.Should().NotBeNull();
+        GoodArtifact artifact = result.Artifact!;
+        artifact.SetKey.Should().Be("Instructor");
+        artifact.SlotKey.Should().Be("plume");
+        artifact.MainStatKey.Should().Be("atk");
+        artifact.Level.Should().Be(10);
+        artifact.Substats.Should().HaveCount(4);
+    }
+
+    [TestMethod]
+    public void ParseFile_ManualBagCelestialFlowerReadsArtifact()
+    {
+        using OcrTextReader reader = new();
+        ArtifactOcrService service = new(reader);
+        ArtifactRegionParser parser = new(service);
+
+        ScanResult result = parser.ParseFile(
+            GetRepoFilePath("data", "log-manual", "bug_new_5", "1780836859247.png"),
+            BagCardRegion);
+
+        result.Error.Should().BeNull();
+        result.Capture.Layout.Should().Be("roi-bag-card");
+        result.Artifact.Should().NotBeNull();
+        GoodArtifact artifact = result.Artifact!;
+        artifact.SetKey.Should().Be("CelestialGift");
+        artifact.SlotKey.Should().Be("flower");
+        artifact.Level.Should().Be(20);
+        artifact.Substats.Should().HaveCount(4);
+    }
+
+    [TestMethod]
+    public void ParseFile_ManualBagObsidianSandsReadsArtifact()
+    {
+        using OcrTextReader reader = new();
+        ArtifactOcrService service = new(reader);
+        ArtifactRegionParser parser = new(service);
+
+        ScanResult result = parser.ParseFile(
+            GetRepoFilePath("data", "log-manual", "bug_new_1", "sucess1.png"),
+            BagCardRegion);
+
+        result.Error.Should().BeNull();
+        result.Capture.Layout.Should().Be("roi-bag-card");
+        result.Artifact.Should().NotBeNull();
+        GoodArtifact artifact = result.Artifact!;
+        artifact.SetKey.Should().Be("ObsidianCodex");
+        artifact.SlotKey.Should().Be("sands");
+        artifact.MainStatKey.Should().Be("atk_");
+        artifact.Level.Should().Be(20);
+        artifact.Substats.Should().HaveCount(4);
+        artifact.Location.Should().Be("Fischl");
+    }
+
+    [TestMethod]
+    public void ParseFile_NonArtifactScreenReturnsMissingFields_NotCrash()
+    {
+        using OcrTextReader reader = new();
+        ArtifactOcrService service = new(reader);
+        ArtifactRegionParser parser = new(service);
+
+        ScanResult result = parser.ParseFile(
+            GetRepoFilePath("data", "log-manual", "bug_new_1", "GenshinImpact_T3mXtQSZzq.png"),
+            new ScanRegion
+            {
+                X = 0.68, Y = 0.1, Width = 0.27, Height = 0.8, Unit = "normalized-client"
+            });
+
+        // This is a non-artifact screen (character showcase). The ROI may classify
+        // it as a character panel due to white UI text, but all OCR fields will be
+        // empty — resulting in missing fields. That's acceptable: the user sees
+        // a clear scan failure and can adjust ROI.
+        result.MissingFields.Should().NotBeEmpty();
+        result.Error.Should().Contain("missing");
     }
 
     [TestMethod]

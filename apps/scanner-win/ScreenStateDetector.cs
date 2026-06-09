@@ -158,4 +158,37 @@ internal static class ScreenStateDetector
     {
         return Math.Max(0, Math.Min(1, value));
     }
+
+    public static ScanRegion? GetRecommendedRegion(string screenStateCode)
+    {
+        return screenStateCode switch
+        {
+            // Bag inventory detail panel: normalized coords derived from
+            // ScreenshotArtifactParser.BagInventoryProfile.PanelRect
+            // which is (1308, 120, 494, 962) ÷ 1920×1200.
+            ScreenStateCodes.ArtifactBagDetail => new ScanRegion
+            {
+                X = 1308.0 / 1920.0,
+                Y = 120.0 / 1200.0,
+                Width = 494.0 / 1920.0,
+                Height = 962.0 / 1200.0,
+                Unit = "normalized-client"
+            },
+
+            // Character equipment detail panel: generous coverage derived from
+            // ScreenshotArtifactParser.EquippedCharacterProfile field bounds
+            // (x: 1463..1883, y: 119..1090) with padding from detection region
+            // rightRed: Rect(1420, 95, 470, 720) ÷ 1920×1200.
+            ScreenStateCodes.CharacterArtifactDetail => new ScanRegion
+            {
+                X = (1420.0 - 5.0) / 1920.0,
+                Y = (95.0 - 5.0) / 1200.0,
+                Width = (470.0 + 10.0) / 1920.0,
+                Height = (720.0 + 280.0) / 1200.0,
+                Unit = "normalized-client"
+            },
+
+            _ => null
+        };
+    }
 }

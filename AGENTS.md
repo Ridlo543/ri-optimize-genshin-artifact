@@ -26,6 +26,18 @@ This repository is a Windows desktop-first Genshin Impact artifact decision assi
 
 Use Context7 MCP whenever answering or implementing questions involving libraries, frameworks, SDKs, APIs, CLI tools, or cloud services. Resolve the library first, then query docs.
 
+## Resolution Handling
+
+- **ROI-first path (live scanner)**: fully resolution-safe — `ArtifactRegionParser` uses normalized client coordinates (0..1). Always adapts.
+- **Screenshot fallback path**: `RectFromScreen()` divides by 1920×1200 for consistent normalized coordinates. `ImageCropper.Scale()` converts back to actual pixel coords using screenshot dimensions. At 16:9, character panel is proportionally positioned — scaling gives correct crops without vertical shift. A conditional yShift fallback retries when OCR fails at non-1200p.
+- **Fixture coverage**: 37/43 fixtures at 1920×1200 (16:10), 1 at 1280×800 (16:10). **4 fixtures at 1920×1080 (16:9) — wired as regression tests (122/122 total).** 2 bag fixtures pass via proportional scaling; 2 character fixtures pass via no-shift-first + conditional yShift fallback.
+- **`ImageCropper.Scale()`**: resolution-agnostic — `ImageCropperTests.cs` proves correct behavior across 960×600, 1920×1200, 3840×2400, and documents the 16:9 vertical shift.
+- **Conditional yShift**: `yShift = (1200 - height) * 7 / 20` applied only when slot/mainStat missing AND height ≠ 1200. Not universal — proportional scaling (no shift) is the primary path. This handles both images that need shift and images that don't (verified with 1080p fixtures).
+- **Dice coefficient fuzzy matching** (`ArtifactTextParser.cs:ParseSlotKey`): Bigram Dice fallback with threshold 0.35 recovers garbled slot text (e.g. "pumeordean" → "plume", "Goblet of Eonothem" → "goblet"). 12 dedicated tests.
+- **IK-style slot preprocessing** (`ArtifactImagePreprocessor.cs:PreprocessSlot`): Contrast(80) → Grayscale → Invert, no scaling. Last-resort fallback in `ReadSlotKey` at confidence ≥ 0.45.
+- **Flower/plume short-circuit** (`ArtifactOcrService.cs:ReadMainStatKey`): Returns "hp"/"atk" immediately when slot is flower/plume. No OCR needed.
+- **Dual aspect-ratio profiles**: Factory methods `CreateBagProfile()`, `CreateCharacterProfile()`, `CreateCharacterLongTitleProfile()` replace static readonly profiles. Same 1200p-reference coordinates; yShift passed separately.
+
 ## Quality Workflow
 
 For implementation work:

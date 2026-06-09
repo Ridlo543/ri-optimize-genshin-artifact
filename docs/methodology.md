@@ -8,6 +8,10 @@ The app uses a community-derived Genshin artifact probability model. It is not o
 - Minor affix generation uses weighted probabilities.
 - Once an artifact has four active substats, each upgrade milestone chooses one slot uniformly.
 - 5-star roll values use four tiers: 70%, 80%, 90%, and 100% of max.
+- Roll value tier probabilities are non-uniform, based on community-datamined drop rates:
+  - 5-star/4-star/3-star: 44% (100%), 31% (90%), 19% (80%), 6% (70% of max)
+  - 2-star: 50% (100%), 33% (90%), 17% (80% of max)
+  - Previous uniform 25% assumption was removed in model v3.
 - A known unactivated substat activates at +4 with probability 100% and does not require a weighted new-substat roll.
 
 ## Scoring

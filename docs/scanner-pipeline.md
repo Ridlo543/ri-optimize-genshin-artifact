@@ -100,13 +100,13 @@
   - `data/fixtures/screenshots/artifact-inventory-plus20.jpg`
   - `data/fixtures/screenshots/artifact-inventory-unactivated.jpg`
 - Current ROI fixture coverage uses:
-  - `data/example/picture/GenshinImpact_lKJAl1Pymu.jpg`
-  - `data/example/picture/GenshinImpact_oXNqhIZyXT.jpg`
-  - `data/example/picture/ArtifactsInventory1_8x5 - weight 0.png`
-  - `data/example/picture/ArtifactsInventory40_8x5 - weight 0.png`
-  - `data/example/picture/ArtifactsInventory45_8x5 - weight 0.png`
-  - `data/example/picture/GenshinImpact_3star.png`
-  - `data/example/picture/GenshinImpact_2star.jpg`
+  - `data/example/picture/character-detail-plus20.jpg`
+  - `data/example/picture/character-detail-unactivated.jpg`
+  - `data/example/picture/bag-card-plus20.png`
+  - `data/example/picture/bag-card-royal-unactivated.png`
+  - `data/example/picture/bag-card-4star.png`
+  - `data/example/picture/bag-card-3star.png`
+  - `data/example/picture/bag-card-2star.jpg`
 - Manual regression ROI coverage uses:
   - `data/log-manual/success_artifact_character_detail_1.png`
   - `data/log-manual/error_artifact_character_detail_1.png`
@@ -159,7 +159,7 @@
 - Run `pnpm scanner:publish:tauri` before native Tauri checks that evaluate `externalBin`.
 - The publish script names the sidecar with Rust's host tuple, for example `GenshinArtifactScanner.Win-x86_64-pc-windows-msvc.exe`.
 - Window bounds coming from scanner status are physical pixels. Rust owns native `set_position`, `set_size`, click-through, focusability, and no-activate orchestration.
-- `pnpm tauri:smoke` launches the native app and asserts that only the bubble is visible at startup, the main/ROI windows are hidden, the bubble expands, and bubble/passive-main clicks preserve the prior foreground PID.
+- `pnpm tauri:smoke` launches the native app and asserts that only the bubble is visible at startup, the main/ROI windows stay hidden, the bubble expands while remaining topmost, and launcher clicks preserve the prior foreground PID.
 - In debug Tauri runs, Rust invokes the scanner through `dotnet run --project apps/scanner-win/GenshinArtifactScanner.Win.csproj` instead of a prebuilt scanner exe. This keeps `pnpm tauri:dev` aligned with current C# OCR code.
 - Scanner log paths are resolved through `ScannerPaths.FindRepoRoot()`, so live Tauri scans and CLI scans both update repo-root `logs/scanner/region-last.png`.
 

@@ -93,7 +93,7 @@ Run the native window regression check:
 pnpm tauri:smoke
 ```
 
-The smoke test verifies startup visibility, DPI-aware bubble sizing, topmost state, expand behavior, and foreground-focus preservation when clicking the bubble and passive main panel. When Genshin is running, the test prefers its window as the foreground target.
+The smoke test verifies startup visibility, DPI-aware bubble sizing, topmost state, expand behavior, hidden main/ROI windows, and foreground-focus preservation when clicking the launcher. When Genshin is running, the test prefers its window as the foreground target.
 
 The root `pnpm tauri:dev` script runs `scripts/tauri-dev.ps1` first. The preflight adds `%USERPROFILE%\.cargo\bin` to `PATH` when needed, stops an old Vite server from this repo on port `5173`, and refuses to kill unrelated processes using that port.
 

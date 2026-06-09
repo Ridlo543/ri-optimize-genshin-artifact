@@ -6,17 +6,29 @@ import {
   GoodArtifact,
   GoodNormalizationWarning,
   goodArtifactToArtifactInput,
+  GOOD_SLOT_KEY_TO_LABEL,
+  GOOD_STAT_KEY_TO_LABEL,
+  mapGoodStatKey,
   normalizeGoodArtifact,
   ScanConfidence,
   assessScannerResultTrust,
   ScannerArtifactResult,
-  ScannerScreenState
+  ScannerScreenState,
+  STAT_TYPE_IS_PERCENT
 } from "@ri-genshin/artifact-schema";
 import { BatchEvaluationResult, DEFAULT_PROFILES, evaluateArtifactExact, evaluateGoodArtifactBatch, ProbabilityResult } from "@ri-genshin/probability-core";
 import { enableMainInput, lockRoiEditor, openRoiEditor } from "./nativeWindows";
-import { loadLatestScannerResult, loadLatestScannerResultRevision, loadScanRegion, saveLatestScannerResult, subscribeLatestScannerResult } from "./roi";
+import {
+  loadLatestScannerResult,
+  loadLatestScannerResultRevision,
+  loadScanRegion,
+  saveLatestScannerResult,
+  saveRoiEditingState,
+  saveScanRegion,
+  subscribeLatestScannerResult
+} from "./roi";
 import { IDLE_SCAN_RESULT, SAMPLE_SCAN_RESULT } from "./sample";
-import { classifyRegionArtifact, parseScreenshotFixture, scanRegionArtifact, scannerStatus, ScannerStatus } from "./scanner";
+import { classifyRegionArtifact, detectArtifactRegion, parseScreenshotFixture, scanRegionArtifact, scannerStatus, ScannerStatus } from "./scanner";
 import {
   applyScannerCorrection,
   ARTIFACT_LEVEL_OPTIONS,
@@ -24,6 +36,7 @@ import {
   ArtifactMainStatCorrectionSelection,
   ArtifactSlotCorrectionSelection,
   getArtifactMainStatOptions,
+  getInitialScannerCorrections,
   getScannerCorrectionState
 } from "./scannerCorrection";
 import { loadEvaluationProfile, saveEvaluationProfile } from "./evaluationProfile";
@@ -75,11 +88,14 @@ export function App() {
   const [manualLevel, setManualLevel] = useState(0);
   const [manualSlotKey, setManualSlotKey] = useState<ArtifactSlotCorrectionSelection>("");
   const [manualMainStatKey, setManualMainStatKey] = useState<ArtifactMainStatCorrectionSelection>("");
-  const [message, setMessage] = useState("Set the red ROI box on the artifact detail panel, then click Analyze.");
+  const [message, setMessage] = useState("1. Click Set Area → 2. Place box over artifact → 3. Click Use This Area → 4. Click Analyze");
   const busyRef = useRef(false);
   const watchPollingRef = useRef(false);
+  const statusPollingRef = useRef(false);
   const lastScannedHashRef = useRef<string | null>(null);
   const startupResultRevisionRef = useRef(loadLatestScannerResultRevision());
+  const autoDetectStartupRef = useRef(false);
+  const lastAutoDetectWatchRef = useRef(0);
 
   const profile = DEFAULT_PROFILES.find((item) => item.id === profileId) ?? DEFAULT_PROFILES[0];
 
@@ -91,7 +107,21 @@ export function App() {
   const roiAttention = shouldHighlightRoi(scannerResult);
 
   useEffect(() => {
-    void refreshStatus();
+    const initial = getInitialScannerCorrections(scannerResult);
+    setManualLevel(initial.level);
+    setManualSlotKey(initial.slotKey);
+    setManualMainStatKey(initial.mainStatKey);
+  }, [scannerResult]);
+
+  useEffect(() => {
+    async function onMount() {
+      await refreshStatus();
+      const hasSavedRoi = window.localStorage.getItem("ri-genshin.roi.region") !== null;
+      if (!hasSavedRoi) {
+        await tryAutoDetectRegion();
+      }
+    }
+    void onMount();
   }, []);
 
   useEffect(() => {
@@ -139,11 +169,33 @@ export function App() {
   }, [watching]);
 
   async function refreshStatus() {
+    if (statusPollingRef.current) {
+      return;
+    }
+    statusPollingRef.current = true;
     try {
       const next = await scannerStatus();
       setStatus(next);
     } catch {
       setStatus({ available: false, error: "Tauri scanner command is unavailable in browser preview." });
+    } finally {
+      statusPollingRef.current = false;
+    }
+  }
+
+  async function tryAutoDetectRegion() {
+    if (!isTauri() || autoDetectStartupRef.current) {
+      return;
+    }
+    autoDetectStartupRef.current = true;
+    try {
+      const result = await detectArtifactRegion();
+      if (result.recommendedRegion && result.screenState?.readyForArtifactOcr) {
+        saveScanRegion(result.recommendedRegion);
+        setMessage(`Scan area auto-placed for ${screenStateLabel(result.screenState)}. Adjust with Set Area if needed.`);
+      }
+    } catch {
+      // Auto-detect is a convenience — silent failure is acceptable.
     }
   }
 
@@ -172,10 +224,18 @@ export function App() {
     busyRef.current = true;
     setBusy(true);
     if (!silent) {
-      setMessage("Scanning artifact ROI...");
+      setMessage("Scanning artifact area...");
     }
     try {
       await lockRoiEditor().catch(() => undefined);
+      const classification = await classifyRegionArtifact(loadScanRegion());
+      if (!classification.screenState?.readyForArtifactOcr) {
+        setArtifactJson(formatArtifactJson(classification));
+        saveLatestScannerResult(classification);
+        setMessage(formatScannerMessage(classification, "Adjust the scan area, then try again."));
+        return;
+      }
+
       const result = await scanRegionArtifact(loadScanRegion(), { occlusionAvoided: true });
       if (result.capture.regionHash) {
         lastScannedHashRef.current = result.capture.regionHash;
@@ -200,9 +260,27 @@ export function App() {
     try {
       const classification = await classifyRegionArtifact(loadScanRegion());
       if (!classification.screenState?.readyForArtifactOcr) {
+        const now = Date.now();
+        if ((now - lastAutoDetectWatchRef.current) > 10_000) {
+          lastAutoDetectWatchRef.current = now;
+          try {
+            const detect = await detectArtifactRegion();
+            if (detect.recommendedRegion && detect.screenState?.readyForArtifactOcr) {
+              saveScanRegion(detect.recommendedRegion);
+              const retry = await classifyRegionArtifact(loadScanRegion());
+              if (retry.screenState?.readyForArtifactOcr) {
+                lastScannedHashRef.current = retry.capture.regionHash ?? null;
+                await handleScan(true);
+                return;
+              }
+            }
+          } catch {
+            // Auto-detect failed — show the original classification message.
+          }
+        }
         setArtifactJson(formatArtifactJson(classification));
         saveLatestScannerResult(classification);
-        setMessage(formatScannerMessage(classification, "Watching ROI..."));
+        setMessage(formatScannerMessage(classification, "Watching scan area..."));
         return;
       }
 
@@ -254,11 +332,15 @@ export function App() {
 
   async function handleEditRoi() {
     try {
-      const next = status?.available ? status : await scannerStatus();
-      setStatus(next);
-      await openRoiEditor(next);
-      setMessage("ROI edit mode enabled. Move or resize the red box, then lock it.");
+      saveRoiEditingState(true);
+      await openRoiEditor(status);
+      setMessage(
+        status?.available
+          ? "Adjust the red box to cover one artifact detail panel, then click Use This Area."
+          : "Test mode: adjust the red box now. Live OCR will work after Genshin is open."
+      );
     } catch (caught) {
+      saveRoiEditingState(false);
       setMessage(caught instanceof Error ? caught.message : "Unable to open ROI editor.");
     }
   }
@@ -315,9 +397,9 @@ export function App() {
           {watching ? <Square size={16} /> : <Eye size={16} />}
           {watching ? "Stop" : "Watch"}
         </button>
-        <button className={roiAttention ? "roi-action--attention" : undefined} onClick={() => void handleEditRoi()}>
+        <button className={roiAttention ? "roi-action--attention" : undefined} onClick={() => void handleEditRoi()} title="Place the scan box over an artifact detail panel">
           <SlidersHorizontal size={16} />
-          Edit ROI
+          Set Area
         </button>
         <label className="profile-control" title={profile.description}>
           <span>Evaluation profile</span>
@@ -436,6 +518,29 @@ export function App() {
                   <li key={line}>{line}</li>
                 ))}
               </ul>
+              {scannerResult?.artifact ? (
+                <details className="captured-data" open>
+                  <summary>Captured Data — edit in JSON below</summary>
+                  <div className="captured-data__grid">
+                    <div className="captured-data__row">
+                      <span className="captured-data__label">Main:</span>
+                      <span className="captured-data__value">{GOOD_STAT_KEY_TO_LABEL[scannerResult.artifact.mainStatKey] ?? scannerResult.artifact.mainStatKey}</span>
+                    </div>
+                    {scannerResult.artifact.substats.map((substat, i) => (
+                      <div key={i} className="captured-data__row">
+                        <span className="captured-data__label">{GOOD_STAT_KEY_TO_LABEL[substat.key] ?? substat.key}:</span>
+                        <span className="captured-data__value">{substat.value}{STAT_TYPE_IS_PERCENT.has(mapGoodStatKey(substat.key)) ? "%" : ""}</span>
+                      </div>
+                    ))}
+                    {scannerResult.artifact.unactivatedSubstats?.map((substat, i) => (
+                      <div key={`u-${i}`} className="captured-data__row captured-data__row--unactivated">
+                        <span className="captured-data__label">{GOOD_STAT_KEY_TO_LABEL[substat.key] ?? substat.key}:</span>
+                        <span className="captured-data__value">{substat.value}{STAT_TYPE_IS_PERCENT.has(mapGoodStatKey(substat.key)) ? "%" : ""} (locked)</span>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              ) : null}
             </>
           ) : evaluation.kind === "batch" ? (
             <>
@@ -479,7 +584,7 @@ export function App() {
                         <option value="">Select slot</option>
                         {ARTIFACT_SLOT_OPTIONS.map((slot) => (
                           <option key={slot} value={slot}>
-                            {friendlySlot(slot)}
+                            {GOOD_SLOT_KEY_TO_LABEL[slot] ?? slot}
                           </option>
                         ))}
                       </select>
@@ -492,7 +597,7 @@ export function App() {
                         <option value="">Select main stat</option>
                         {manualMainStatOptions.map((stat) => (
                           <option key={stat} value={stat}>
-                            {friendlyStat(stat)}
+                            {GOOD_STAT_KEY_TO_LABEL[stat] ?? stat}
                           </option>
                         ))}
                       </select>
@@ -546,13 +651,13 @@ export function App() {
         ) : null}
       </section>
 
-      {debugToolsOpen ? <section className="panel json-panel">
+      <section className="panel json-panel">
         <div className="panel__header">
           <span>Scanner JSON</span>
-          <small>manual correction is live</small>
+          <small>edit to correct OCR</small>
         </div>
         <textarea value={artifactJson} onChange={(event) => setArtifactJson(event.target.value)} spellCheck={false} />
-      </section> : null}
+      </section>
     </main>
   );
 }
@@ -578,27 +683,7 @@ function formatRequiredConfidence(confidence: ScanConfidence): string {
 
 function formatArtifactFacts(artifact: GoodArtifact): string {
   const guaranteed = artifact.unactivatedSubstats?.length ?? 0;
-  return `${artifact.rarity}-star ${friendlySlot(artifact.slotKey)} · ${friendlyStat(artifact.mainStatKey)} · +${artifact.level} · ${artifact.substats.length} active${guaranteed ? ` + ${guaranteed} guaranteed` : ""}`;
-}
-
-function friendlySlot(value: string): string {
-  return ({ flower: "Flower", plume: "Plume", sands: "Sands", goblet: "Goblet", circlet: "Circlet" } as Record<string, string>)[value] ?? value;
-}
-
-function friendlyStat(value: string): string {
-  return (
-    {
-      hp: "HP",
-      atk: "ATK",
-      hp_: "HP%",
-      atk_: "ATK%",
-      def_: "DEF%",
-      eleMas: "Elemental Mastery",
-      enerRech_: "Energy Recharge",
-      critRate_: "CRIT Rate",
-      critDMG_: "CRIT DMG"
-    } as Record<string, string>
-  )[value] ?? value;
+  return `${artifact.rarity}-star ${GOOD_SLOT_KEY_TO_LABEL[artifact.slotKey] ?? artifact.slotKey} · ${GOOD_STAT_KEY_TO_LABEL[artifact.mainStatKey] ?? artifact.mainStatKey} · +${artifact.level} · ${artifact.substats.length} active${guaranteed ? ` + ${guaranteed} guaranteed` : ""}`;
 }
 
 function formatPercent(value: number): string {
@@ -630,13 +715,13 @@ function formatScannerMessage(result: ScannerArtifactResult, readyMessage: strin
 
 function formatScreenStateMessage(screenState: ScannerScreenState): string {
   if (screenState.message.startsWith("Review ROI")) {
-    return "Adjust the ROI so the red box covers only the artifact detail panel.";
+    return "Adjust the red box so it covers only the artifact detail panel.";
   }
   if (screenState.code === "artifact-bag-grid") {
-    return "Open one artifact detail first, then place the ROI on that detail panel.";
+    return "Open one artifact detail first, then place the scan box on that detail panel.";
   }
   if (screenState.code === "unknown-game-screen") {
-    return "Open Artifact Bag or Character Artifacts, select one artifact, then adjust the ROI.";
+    return "Open Artifact Bag or Character Artifacts, select one artifact, then adjust the scan area.";
   }
   return screenState.message;
 }

@@ -30,6 +30,7 @@ internal static class ScannerCommands
                 "parse-screenshot-fixture" => ParseScreenshotFixture(args),
                 "classify-screenshot-artifact" => ClassifyScreenshotArtifact(args),
                 "classify-screenshot-fixture" => ClassifyScreenshotFixture(args),
+                "detect-artifact-region" => DetectArtifactRegion(),
                 _ => new ScannerError($"Unknown command: {command}")
             };
         }
@@ -99,6 +100,33 @@ internal static class ScannerCommands
         return ScreenshotArtifactParser.ClassifyBitmap(windowBitmap, "screen", "screen-classification", Path.GetFullPath(outputPath));
     }
 
+    private static object DetectArtifactRegion()
+    {
+        if (!GameWindow.TryFind(out GameWindowInfo? window) || window is null)
+        {
+            return new DetectArtifactRegionResult
+            {
+                ScreenState = new ScreenStateInfo
+                {
+                    Code = ScreenStateCodes.GameNotFound,
+                    ReadyForArtifactOcr = false,
+                    Confidence = 1,
+                    Message = "Waiting for Genshin. Open the game in windowed or borderless mode."
+                }
+            };
+        }
+
+        using Bitmap windowBitmap = ScreenCapture.CaptureClient(window);
+        ScreenStateInfo screenState = ScreenStateDetector.Detect(windowBitmap);
+        ScanRegion? region = ScreenStateDetector.GetRecommendedRegion(screenState.Code);
+
+        return new DetectArtifactRegionResult
+        {
+            ScreenState = screenState,
+            RecommendedRegion = region
+        };
+    }
+
     private static object ScanRegionArtifact(string[] args)
     {
         if (!GameWindow.TryFind(out GameWindowInfo? window) || window is null)
@@ -115,8 +143,8 @@ internal static class ScannerCommands
 
         using OcrTextReader reader = new();
         ArtifactOcrService service = new(reader);
-        ArtifactRegionParser parser = new(service);
-        ScanResult result = parser.ParseBitmap(
+        ArtifactRegionParser regionParser = new(service);
+        ScanResult result = regionParser.ParseBitmap(
             windowBitmap,
             region,
             "screen",
@@ -126,8 +154,67 @@ internal static class ScannerCommands
             paths.ScanId,
             occlusionAvoided,
             writeDebugImage: true);
+
+        // Character detail fallback: when the ROI-based scan detects a character
+        // panel but critical fields are missing, retry with the full-screenshot
+        // parser. The screenshot parser uses absolute crop coordinates designed
+        // for character panels, which are more reliable than the ROI-based crop
+        // when the user's saved ROI is positioned for bag cards.
+        CaptureInfo? resultCapture = result.Capture;
+        List<string>? resultMissingFields = result.MissingFields;
+        if (resultMissingFields?.Count > 0 && resultCapture is not null && IsCharacterPanelLayout(resultCapture.Layout))
+        {
+            ScreenshotArtifactParser screenshotParser = new(service);
+            ScanResult fallback = screenshotParser.ParseBitmap(
+                windowBitmap,
+                "screen",
+                "region-artifact",
+                Path.GetFullPath(paths.SnapshotSourcePath),
+                writeDebugImage: true);
+
+            CaptureInfo? fallbackCapture = fallback.Capture;
+            List<string>? fallbackMissingFields = fallback.MissingFields;
+            if (fallback.Artifact is not null && fallbackMissingFields?.Count < resultMissingFields?.Count && fallbackCapture is not null)
+            {
+                fallback = new ScanResult
+                {
+                    Source = fallback.Source,
+                    Mode = fallback.Mode,
+                    Confidence = fallback.Confidence,
+                    Artifact = fallback.Artifact,
+                    ArtifactDraft = fallback.ArtifactDraft,
+                    MissingFields = fallback.MissingFields,
+                    OptionalWarnings = fallback.OptionalWarnings,
+                    ScreenState = fallback.ScreenState,
+                    Capture = new CaptureInfo
+                    {
+                        ScanId = resultCapture.ScanId,
+                        Resolution = fallbackCapture.Resolution,
+                        CapturedAt = fallbackCapture.CapturedAt,
+                        Layout = fallbackCapture.Layout,
+                        ScreenshotImagePath = fallbackCapture.ScreenshotImagePath,
+                        RegionImagePath = resultCapture.RegionImagePath,
+                        ScreenshotHash = fallbackCapture.ScreenshotHash,
+                        RegionHash = resultCapture.RegionHash,
+                        Region = resultCapture.Region,
+                        OcclusionAvoided = resultCapture.OcclusionAvoided
+                    },
+                    Diagnostics = fallback.Diagnostics,
+                    Error = fallback.Error
+                };
+                result = fallback;
+            }
+        }
+
         CopyIfExists(paths.SnapshotRegionPath, paths.LastRegionPath);
         return result;
+    }
+
+    private static bool IsCharacterPanelLayout(string? layout)
+    {
+        return layout is not null && (
+            layout.StartsWith("roi-character-panel", StringComparison.Ordinal) ||
+            layout.StartsWith("equipped-character-panel", StringComparison.Ordinal));
     }
 
     private static object ClassifyRegionArtifact(string[] args)

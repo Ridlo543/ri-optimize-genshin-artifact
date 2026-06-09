@@ -1,6 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ScannerArtifactResult } from "@ri-genshin/artifact-schema";
-import { loadLatestScannerResultRevision, saveLatestScannerResult, subscribeLatestScannerResult } from "./roi";
+import {
+  loadLatestScannerResult,
+  loadLatestScannerResultRevision,
+  loadRoiEditingState,
+  saveLatestScannerResult,
+  saveRoiEditingState,
+  subscribeLatestScannerResult
+} from "./roi";
 
 describe("scanner result storage", () => {
   beforeEach(() => {
@@ -33,6 +40,26 @@ describe("scanner result storage", () => {
     expect(loadLatestScannerResultRevision()).toContain("abc123");
     expect(listener).toHaveBeenCalledWith(expect.stringContaining("abc123"));
     unsubscribe();
+  });
+
+  it("ignores malformed stored scanner results from older app states", () => {
+    window.localStorage.setItem(
+      "ri-genshin.scanner.latestResult",
+      JSON.stringify({
+        error: "Scanner sidecar failed.",
+        available: false
+      })
+    );
+
+    expect(loadLatestScannerResult()).toBeNull();
+  });
+
+  it("persists ROI editing mode for overlay test workflows", () => {
+    expect(loadRoiEditingState()).toBe(false);
+    saveRoiEditingState(true);
+    expect(loadRoiEditingState()).toBe(true);
+    saveRoiEditingState(false);
+    expect(loadRoiEditingState()).toBe(false);
   });
 });
 

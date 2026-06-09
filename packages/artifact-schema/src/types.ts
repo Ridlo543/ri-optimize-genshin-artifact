@@ -110,6 +110,11 @@ export type ScannerScreenStateCode =
   | "paimon-menu"
   | "unknown-game-screen";
 
+export interface DetectArtifactRegionResult {
+  screenState: ScannerScreenState | null;
+  recommendedRegion: ScanRegion | null;
+}
+
 export interface ScannerScreenState {
   code: ScannerScreenStateCode;
   readyForArtifactOcr: boolean;

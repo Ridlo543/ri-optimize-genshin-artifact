@@ -25,7 +25,7 @@ export function FixturePlaygroundApp() {
   const [watching, setWatching] = useSharedWatchState();
   const [collapsed, setCollapsed] = useState(true);
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const [message, setMessage] = useState("Fixture loaded. Click the bubble, adjust ROI, then Analyze.");
+  const [message, setMessage] = useState("Fixture loaded. Click the bubble, adjust area, then Analyze.");
   const stageRef = useRef<HTMLDivElement | null>(null);
   const lastHashRef = useRef<string | null>(null);
   const [stageSize, setStageSize] = useState({ width: 1920, height: 1200 });
@@ -89,7 +89,7 @@ export function FixturePlaygroundApp() {
     }
 
     setBusy(true);
-    setMessage("Running fixture ROI analysis...");
+    setMessage("Running fixture analysis...");
     try {
       const scan = await parseRegionFixture(fixture.fileName, region);
       setResult(scan);
@@ -113,7 +113,7 @@ export function FixturePlaygroundApp() {
       const hash = classification.capture.regionHash;
       if (!classification.screenState?.readyForArtifactOcr) {
         setResult(classification);
-        setMessage(classification.screenState?.message ?? "Review ROI.");
+        setMessage(classification.screenState?.message ?? "Adjust scan area.");
         return;
       }
       if (hash && hash === lastHashRef.current) {

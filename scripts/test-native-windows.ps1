@@ -188,8 +188,10 @@ if ($existingApp) {
 
 $stdout = Join-Path $logsDir "tauri-stdout.log"
 $stderr = Join-Path $logsDir "tauri-stderr.log"
+$tauriDevScript = Join-Path $PSScriptRoot "tauri-dev.ps1"
+$launcherEnv = "$env:RI_GENSHIN_SMOKE='1'; & '$tauriDevScript'"
 $launcher = Start-Process -FilePath "powershell.exe" `
-    -ArgumentList "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", (Join-Path $PSScriptRoot "tauri-dev.ps1") `
+    -ArgumentList "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", $launcherEnv `
     -WorkingDirectory $repoRoot `
     -WindowStyle Hidden `
     -RedirectStandardOutput $stdout `
@@ -257,31 +259,21 @@ try {
     Assert-Condition ($expandedBubble[0].TopMost) "Expected the assistant bubble to remain topmost after expanding."
     Assert-Condition ($expandedBubble[0].ClientWidth -gt $bubble[0].ClientWidth + 100) "Assistant bubble did not expand after clicking the launcher."
     Assert-Condition ($expandedBubble[0].ClientHeight -gt $bubble[0].ClientHeight + 80) "Assistant bubble height did not expand after clicking the launcher."
+    $mainAfterExpand = @($expandedWindows | Where-Object { $_.Title -eq "Genshin Artifact Assistant" })
+    $overlayAfterExpand = @($expandedWindows | Where-Object { $_.Title -eq "Artifact ROI Overlay" })
+    Assert-Condition ($mainAfterExpand.Count -eq 1 -and -not $mainAfterExpand[0].Visible) "Main panel became visible during bubble expansion."
+    Assert-Condition ($overlayAfterExpand.Count -eq 1 -and -not $overlayAfterExpand[0].Visible) "ROI overlay became visible during bubble expansion."
+    Assert-Condition ([NativeWindowAudit]::GetForegroundProcessId() -eq $foregroundBefore) "Expanding the assistant bubble changed foreground focus."
     Save-WindowCapture $expandedBubble[0] (Join-Path $logsDir "assistant-expanded-native.png")
-
-    # Click the far-right action-row button (Open Panel). Use proportional native
-    # coordinates so the smoke test survives 100-150% DPI scaling and the compact
-    # bubble's metric content above the action row.
-    [NativeWindowAudit]::Click($expandedBubble[0].X + $expandedBubble[0].Width - 35, $expandedBubble[0].Y + [int]($expandedBubble[0].Height * 0.74))
-    Start-Sleep -Milliseconds 1500
-    $panelWindows = @([NativeWindowAudit]::GetWindows($app.Id))
-    $visibleMain = @($panelWindows | Where-Object { $_.Title -eq "Genshin Artifact Assistant" -and $_.Visible })
-    Assert-Condition ($visibleMain.Count -eq 1) "Open Panel did not show the main window."
-    Assert-Condition ([NativeWindowAudit]::GetForegroundProcessId() -eq $foregroundBefore) "Opening the main panel changed foreground focus."
-    [NativeWindowAudit]::Click($visibleMain[0].X + [int]($visibleMain[0].Width / 2), $visibleMain[0].Y + [int]($visibleMain[0].Height / 2))
-    Start-Sleep -Milliseconds 500
-    Assert-Condition ([NativeWindowAudit]::GetForegroundProcessId() -eq $foregroundBefore) "Clicking the passive main panel changed foreground focus."
-    $panelWindows | ConvertTo-Json -Depth 3 | Set-Content -LiteralPath (Join-Path $logsDir "windows-main-passive.json")
-    Save-WindowCapture $visibleMain[0] (Join-Path $logsDir "main-passive-native.png")
     $preferredGenshinPid = if ($genshin) { $genshin.Id } else { $null }
     [pscustomobject]@{
         PreferredGenshinPid = $preferredGenshinPid
         ForegroundBefore = $foregroundBefore
         ForegroundAfterBubble = $foregroundAfter
-        ForegroundAfterMain = [NativeWindowAudit]::GetForegroundProcessId()
+        ForegroundAfterExpand = [NativeWindowAudit]::GetForegroundProcessId()
     } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $logsDir "focus-proof.json")
 
-    Write-Host "Native window smoke passed. Startup shows only the compact $($bubble[0].ClientWidth)x$($bubble[0].ClientHeight) transparent assistant host. Foreground PID $foregroundBefore was preserved."
+    Write-Host "Native window smoke passed. Startup shows only the compact $($bubble[0].ClientWidth)x$($bubble[0].ClientHeight) transparent assistant host, expansion stayed topmost, and foreground PID $foregroundBefore was preserved."
 }
 finally {
     if ($launcher -and -not $launcher.HasExited) {

@@ -3,7 +3,7 @@ using System.Drawing.Imaging;
 
 namespace GenshinArtifactScanner.Win;
 
-internal static class ArtifactImagePreprocessor
+internal static unsafe class ArtifactImagePreprocessor
 {
     public static Bitmap PreprocessSubstats(Bitmap source)
     {
@@ -17,6 +17,19 @@ internal static class ArtifactImagePreprocessor
         using Bitmap scaled = Scale(source, 3);
         return ApplyColorMatrix(scaled, CreateSubstatMatrix());
     }
+
+    public static Bitmap PreprocessSlot(Bitmap source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        // Contrast(80) -> Grayscale -> Invert (IK-style, no scaling)
+        Bitmap contrast = AdjustContrast(source, 80);
+        Bitmap gray = ToGrayscale(contrast);
+        contrast.Dispose();
+        Invert(gray);
+        return gray;
+    }
+
+
 
     public static Bitmap PreprocessLevel(Bitmap source)
     {
@@ -72,13 +85,23 @@ internal static class ArtifactImagePreprocessor
     private static Bitmap CropDarkPill(Bitmap source)
     {
         bool[,] darkMask = new bool[source.Width, source.Height];
-        for (int y = 0; y < source.Height; y++)
+        BitmapData data = source.LockBits(new Rectangle(0, 0, source.Width, source.Height), ImageLockMode.ReadOnly, PixelFormat.Format24bppRgb);
+        try
         {
-            for (int x = 0; x < source.Width; x++)
+            byte* ptr = (byte*)data.Scan0;
+            int stride = data.Stride;
+            for (int y = 0; y < source.Height; y++)
             {
-                Color pixel = source.GetPixel(x, y);
-                darkMask[x, y] = pixel.R < 95 && pixel.G < 95 && pixel.B < 110;
+                for (int x = 0; x < source.Width; x++)
+                {
+                    int offset = y * stride + x * 3;
+                    darkMask[x, y] = ptr[offset + 2] < 95 && ptr[offset + 1] < 95 && ptr[offset] < 110;
+                }
             }
+        }
+        finally
+        {
+            source.UnlockBits(data);
         }
 
         Rectangle crop = FindTopLeftDarkComponent(darkMask, source.Width, source.Height);
@@ -167,21 +190,211 @@ internal static class ArtifactImagePreprocessor
         return best;
     }
 
-    private static Bitmap ThresholdLightText(Bitmap source)
+    private static int ComputeOtsuThreshold(Bitmap source)
     {
-        Bitmap output = new(source.Width, source.Height, PixelFormat.Format24bppRgb);
-        for (int y = 0; y < source.Height; y++)
+        int[] histogram = new int[256];
+        BitmapData data = source.LockBits(new Rectangle(0, 0, source.Width, source.Height), ImageLockMode.ReadOnly, PixelFormat.Format24bppRgb);
+        try
         {
-            for (int x = 0; x < source.Width; x++)
+            byte* ptr = (byte*)data.Scan0;
+            int stride = data.Stride;
+            for (int y = 0; y < source.Height; y++)
             {
-                Color pixel = source.GetPixel(x, y);
-                int brightness = (pixel.R + pixel.G + pixel.B) / 3;
-                Color color = brightness > 150 ? Color.White : Color.Black;
-                output.SetPixel(x, y, color);
+                for (int x = 0; x < source.Width; x++)
+                {
+                    int offset = y * stride + x * 3;
+                    int brightness = (ptr[offset] + ptr[offset + 1] + ptr[offset + 2]) / 3;
+                    histogram[brightness]++;
+                }
+            }
+        }
+        finally
+        {
+            source.UnlockBits(data);
+        }
+
+        int total = source.Width * source.Height;
+        double sum = 0;
+        for (int i = 0; i < 256; i++)
+        {
+            sum += i * histogram[i];
+        }
+
+        double sumB = 0;
+        int wB = 0;
+        double maxVariance = 0;
+        int threshold = 0;
+
+        for (int t = 0; t < 256; t++)
+        {
+            wB += histogram[t];
+            if (wB == 0) continue;
+            int wF = total - wB;
+            if (wF == 0) break;
+
+            sumB += t * histogram[t];
+            double mB = sumB / wB;
+            double mF = (sum - sumB) / wF;
+            double variance = wB * wF * (mB - mF) * (mB - mF);
+            if (variance > maxVariance)
+            {
+                maxVariance = variance;
+                threshold = t;
             }
         }
 
+        return threshold;
+    }
+
+    private static Bitmap ThresholdLightText(Bitmap source)
+    {
+        int otsuThreshold = ComputeOtsuThreshold(source);
+        Bitmap output = new(source.Width, source.Height, PixelFormat.Format24bppRgb);
+        BitmapData srcData = source.LockBits(new Rectangle(0, 0, source.Width, source.Height), ImageLockMode.ReadOnly, PixelFormat.Format24bppRgb);
+        BitmapData dstData = output.LockBits(new Rectangle(0, 0, output.Width, output.Height), ImageLockMode.WriteOnly, PixelFormat.Format24bppRgb);
+        try
+        {
+            byte* srcPtr = (byte*)srcData.Scan0;
+            byte* dstPtr = (byte*)dstData.Scan0;
+            int stride = srcData.Stride;
+            for (int y = 0; y < source.Height; y++)
+            {
+                for (int x = 0; x < source.Width; x++)
+                {
+                    int offset = y * stride + x * 3;
+                    int brightness = (srcPtr[offset] + srcPtr[offset + 1] + srcPtr[offset + 2]) / 3;
+                    byte value = brightness > otsuThreshold ? (byte)255 : (byte)0;
+                    dstPtr[offset] = value;
+                    dstPtr[offset + 1] = value;
+                    dstPtr[offset + 2] = value;
+                }
+            }
+        }
+        finally
+        {
+            source.UnlockBits(srcData);
+            output.UnlockBits(dstData);
+        }
         return output;
+    }
+
+    private static Bitmap AdjustContrast(Bitmap source, int contrastValue)
+    {
+        double factor = (259.0 * (contrastValue + 255.0)) / (255.0 * (259.0 - contrastValue));
+        Bitmap output = new(source.Width, source.Height, PixelFormat.Format24bppRgb);
+        BitmapData srcData = source.LockBits(new Rectangle(0, 0, source.Width, source.Height), ImageLockMode.ReadOnly, PixelFormat.Format24bppRgb);
+        BitmapData dstData = output.LockBits(new Rectangle(0, 0, output.Width, output.Height), ImageLockMode.WriteOnly, PixelFormat.Format24bppRgb);
+        try
+        {
+            byte* srcPtr = (byte*)srcData.Scan0;
+            byte* dstPtr = (byte*)dstData.Scan0;
+            int stride = srcData.Stride;
+            for (int y = 0; y < source.Height; y++)
+            {
+                for (int x = 0; x < source.Width; x++)
+                {
+                    int offset = y * stride + x * 3;
+                    int r = ClampByte((int)(factor * (srcPtr[offset + 2] - 128) + 128));
+                    int g = ClampByte((int)(factor * (srcPtr[offset + 1] - 128) + 128));
+                    int b = ClampByte((int)(factor * (srcPtr[offset] - 128) + 128));
+                    dstPtr[offset] = (byte)b;
+                    dstPtr[offset + 1] = (byte)g;
+                    dstPtr[offset + 2] = (byte)r;
+                }
+            }
+        }
+        finally
+        {
+            source.UnlockBits(srcData);
+            output.UnlockBits(dstData);
+        }
+        return output;
+    }
+
+    private static Bitmap ToGrayscale(Bitmap source)
+    {
+        Bitmap output = new(source.Width, source.Height, PixelFormat.Format24bppRgb);
+        BitmapData srcData = source.LockBits(new Rectangle(0, 0, source.Width, source.Height), ImageLockMode.ReadOnly, PixelFormat.Format24bppRgb);
+        BitmapData dstData = output.LockBits(new Rectangle(0, 0, output.Width, output.Height), ImageLockMode.WriteOnly, PixelFormat.Format24bppRgb);
+        try
+        {
+            byte* srcPtr = (byte*)srcData.Scan0;
+            byte* dstPtr = (byte*)dstData.Scan0;
+            int stride = srcData.Stride;
+            for (int y = 0; y < source.Height; y++)
+            {
+                for (int x = 0; x < source.Width; x++)
+                {
+                    int offset = y * stride + x * 3;
+                    int l = (int)(0.2125 * srcPtr[offset + 2] + 0.7154 * srcPtr[offset + 1] + 0.0721 * srcPtr[offset]);
+                    byte gray = ClampByte(l);
+                    dstPtr[offset] = gray;
+                    dstPtr[offset + 1] = gray;
+                    dstPtr[offset + 2] = gray;
+                }
+            }
+        }
+        finally
+        {
+            source.UnlockBits(srcData);
+            output.UnlockBits(dstData);
+        }
+        return output;
+    }
+
+    private static void Invert(Bitmap image)
+    {
+        BitmapData data = image.LockBits(new Rectangle(0, 0, image.Width, image.Height), ImageLockMode.ReadWrite, PixelFormat.Format24bppRgb);
+        try
+        {
+            byte* ptr = (byte*)data.Scan0;
+            int stride = data.Stride;
+            for (int y = 0; y < image.Height; y++)
+            {
+                for (int x = 0; x < image.Width; x++)
+                {
+                    int offset = y * stride + x * 3;
+                    ptr[offset] = (byte)(255 - ptr[offset]);
+                    ptr[offset + 1] = (byte)(255 - ptr[offset + 1]);
+                    ptr[offset + 2] = (byte)(255 - ptr[offset + 2]);
+                }
+            }
+        }
+        finally
+        {
+            image.UnlockBits(data);
+        }
+    }
+
+    private static void ImageThreshold(Bitmap image, int threshold)
+    {
+        BitmapData data = image.LockBits(new Rectangle(0, 0, image.Width, image.Height), ImageLockMode.ReadWrite, PixelFormat.Format24bppRgb);
+        try
+        {
+            byte* ptr = (byte*)data.Scan0;
+            int stride = data.Stride;
+            for (int y = 0; y < image.Height; y++)
+            {
+                for (int x = 0; x < image.Width; x++)
+                {
+                    int offset = y * stride + x * 3;
+                    int brightness = (ptr[offset] + ptr[offset + 1] + ptr[offset + 2]) / 3;
+                    byte value = brightness > threshold ? (byte)255 : (byte)0;
+                    ptr[offset] = value;
+                    ptr[offset + 1] = value;
+                    ptr[offset + 2] = value;
+                }
+            }
+        }
+        finally
+        {
+            image.UnlockBits(data);
+        }
+    }
+
+    private static byte ClampByte(int value)
+    {
+        return (byte)Math.Clamp(value, 0, 255);
     }
 
     private static Bitmap CopyBitmap(Bitmap source)

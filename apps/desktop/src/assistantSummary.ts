@@ -2,6 +2,8 @@ import {
   assessScannerResultTrust,
   goodArtifactToArtifactInput,
   GoodArtifact,
+  GOOD_SLOT_KEY_TO_LABEL,
+  GOOD_STAT_KEY_TO_LABEL,
   normalizeGoodArtifact,
   ScanConfidence,
   ScannerArtifactResult
@@ -30,8 +32,8 @@ export function buildAssistantSummary(result: ScannerArtifactResult | null, prof
   if (!result) {
     return {
       state: "setup",
-      title: "Set ROI",
-      detail: "Place the red box on the artifact card, then scan.",
+      title: "Set Area",
+      detail: "Click Set Area, then place the box over an artifact detail panel.",
       confidence: "n/a",
       metrics: [],
       details: ["No scan has been run yet."]
@@ -55,9 +57,10 @@ export function buildAssistantSummary(result: ScannerArtifactResult | null, prof
     }
 
     const readyButIncomplete = result.screenState?.readyForArtifactOcr === true;
+    const fallbackTitle = titleFromBlockingReasons(trust.blockingReasons) ?? "Review OCR";
     return {
       state: result.screenState?.readyForArtifactOcr === false || readyButIncomplete ? "review" : "waiting",
-      title: result.screenState?.message.startsWith("Review ROI") ? "Adjust ROI" : readyButIncomplete ? "Review OCR" : "Waiting",
+      title: result.screenState?.message.startsWith("Review ROI") ? "Adjust Area" : readyButIncomplete ? fallbackTitle : "Waiting",
       detail: trust.blockingReasons.join(" ") || result.error || result.screenState?.message || "No artifact data yet.",
       confidence,
       metrics: [],
@@ -67,13 +70,15 @@ export function buildAssistantSummary(result: ScannerArtifactResult | null, prof
 
   const normalized = normalizeGoodArtifact(result.artifact);
   if (!normalized.artifact) {
+    const skipTitle = titleFromNormalizationSkips(normalized.skipReason) ?? "Review OCR";
+    const details = normalized.skipReason ? [normalized.skipReason, ...normalized.warnings.map((warning) => warning.message)] : ["Artifact could not be normalized."];
     return {
       state: "error",
-      title: "Review OCR",
+      title: skipTitle,
       detail: normalized.skipReason ?? "Artifact could not be normalized.",
       confidence,
       metrics: [],
-      details: [normalized.skipReason ?? "Artifact could not be normalized.", ...normalized.warnings.map((warning) => warning.message)]
+      details
     };
   }
 
@@ -134,16 +139,67 @@ export function buildAssistantSummary(result: ScannerArtifactResult | null, prof
 }
 
 function correctionTitle(missingFields: string[]): string {
-  if (missingFields.length === 1 && missingFields[0] === "level") {
-    return "Review Level";
+  const names = missingFields.map(missingFieldLabel).filter(Boolean);
+  if (names.length === 1) {
+    return `Review ${names[0]}`;
   }
-  if (missingFields.length === 1 && missingFields[0] === "slotKey") {
-    return "Review Slot";
-  }
-  if (missingFields.length === 1 && missingFields[0] === "mainStatKey") {
-    return "Review Main Stat";
+  if (names.length >= 2) {
+    return `Review ${names.join(" & ")}`;
   }
   return "Review OCR";
+}
+
+function missingFieldLabel(field: string): string {
+  switch (field) {
+    case "slotKey":
+      return "Slot";
+    case "mainStatKey":
+      return "Main Stat";
+    case "level":
+      return "Level";
+    default:
+      return "";
+  }
+}
+
+function titleFromBlockingReasons(blockingReasons: string[]): string | null {
+  const hasSlot = blockingReasons.some((r) => /(?:artifact slot|slotkey|\bslot\b)/i.test(r) && !r.toLowerCase().includes("review roi"));
+  const hasMainStat = blockingReasons.some((r) => /(?:main stat|mainstatkey)/i.test(r));
+  const hasLevel = blockingReasons.some((r) => /(?:artifact level|level confidence|missing level)/i.test(r));
+  const hasSubstats = blockingReasons.some((r) => /\bsubstats?\b/i.test(r));
+  const hasRoi = blockingReasons.some((r) => /(?:adjust roi|review roi)/i.test(r));
+
+  if (hasRoi) {
+    return "Adjust Area";
+  }
+
+  const parts: string[] = [];
+  if (hasSlot) parts.push("Slot");
+  if (hasMainStat) parts.push("Main Stat");
+  if (hasLevel) parts.push("Level");
+  if (hasSubstats) parts.push("Substats");
+
+  if (parts.length === 1) {
+    return `Review ${parts[0]}`;
+  }
+  if (parts.length >= 2) {
+    return `Review ${parts.join(" & ")}`;
+  }
+  return null;
+}
+
+function titleFromNormalizationSkips(skipReason: string | undefined): string | null {
+  if (!skipReason) {
+    return null;
+  }
+  const lower = skipReason.toLowerCase();
+  if (lower.includes("unactivated substat")) {
+    return "Review Substats";
+  }
+  if (lower.includes("rarity") || lower.includes("level")) {
+    return "Review OCR";
+  }
+  return null;
 }
 
 function compactDecision(label: string): string {
@@ -177,35 +233,7 @@ function formatConfidence(confidence: ScanConfidence): string {
 function formatArtifactFacts(artifact: GoodArtifact): string {
   const active = artifact.substats.length;
   const guaranteed = artifact.unactivatedSubstats?.length ?? 0;
-  return `${artifact.rarity}-star ${slotLabel(artifact.slotKey)} · ${statLabel(artifact.mainStatKey)} · +${artifact.level} · ${active} active${guaranteed > 0 ? ` + ${guaranteed} guaranteed` : ""}`;
-}
-
-function slotLabel(slotKey: string): string {
-  return (
-    {
-      flower: "Flower",
-      plume: "Plume",
-      sands: "Sands",
-      goblet: "Goblet",
-      circlet: "Circlet"
-    }[slotKey] ?? slotKey
-  );
-}
-
-function statLabel(statKey: string): string {
-  return (
-    {
-      hp: "HP",
-      atk: "ATK",
-      hp_: "HP%",
-      atk_: "ATK%",
-      def_: "DEF%",
-      eleMas: "Elemental Mastery",
-      enerRech_: "Energy Recharge",
-      critRate_: "CRIT Rate",
-      critDMG_: "CRIT DMG"
-    }[statKey] ?? statKey
-  );
+  return `${artifact.rarity}-star ${GOOD_SLOT_KEY_TO_LABEL[artifact.slotKey] ?? artifact.slotKey} · ${GOOD_STAT_KEY_TO_LABEL[artifact.mainStatKey] ?? artifact.mainStatKey} · +${artifact.level} · ${active} active${guaranteed > 0 ? ` + ${guaranteed} guaranteed` : ""}`;
 }
 
 function formatFit(value: string): string {

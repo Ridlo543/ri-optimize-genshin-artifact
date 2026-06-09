@@ -1,5 +1,5 @@
-import { ArtifactInput, StatType, SubstatInput } from "@ri-genshin/artifact-schema";
-import { getNewSubstatDistribution, getRemainingMilestones, getRollValues } from "./distribution";
+import { ArtifactInput, ArtifactRarity, StatType, SubstatInput } from "@ri-genshin/artifact-schema";
+import { getNewSubstatDistribution, getRemainingMilestones, getRollValueProbabilities, getRollValues } from "./distribution";
 import { recommendArtifact, Recommendation } from "./recommendation";
 import {
   assessMainStatFit,
@@ -58,7 +58,7 @@ export interface EvaluationOptions {
 
 const DEFAULT_SCORE_THRESHOLDS = [20, 25, 30, 35, 40];
 const DEFAULT_CV_THRESHOLDS = [20, 25, 30, 35, 40];
-export const PROBABILITY_MODEL_VERSION = "artifact-exact-v2";
+export const PROBABILITY_MODEL_VERSION = "artifact-exact-v3";
 
 export function evaluateArtifactExact(
   artifact: ArtifactInput,
@@ -146,7 +146,7 @@ export function evaluateArtifactExact(
   };
 }
 
-export function enumerateOutcomes(initial: ArtifactInput, targetStats: StatType[]): OutcomeState[] {
+export function enumerateOutcomes(initial: ArtifactInput, targetStats: StatType[], getRollValueProbs?: (rarity: ArtifactRarity) => number[]): OutcomeState[] {
   let states: OutcomeState[] = [
     {
       artifact: cloneArtifact(initial),
@@ -161,6 +161,7 @@ export function enumerateOutcomes(initial: ArtifactInput, targetStats: StatType[
     for (const state of states) {
       const active = state.artifact.substats.filter((substat) => substat.active);
       const unactivated = state.artifact.substats.find((substat) => !substat.active);
+      const rollProbs = (getRollValueProbs ?? getRollValueProbabilities)(state.artifact.rarity);
 
       if (active.length < 4) {
         if (unactivated) {
@@ -173,18 +174,18 @@ export function enumerateOutcomes(initial: ArtifactInput, targetStats: StatType[
         } else {
           for (const candidate of getNewSubstatDistribution(state.artifact)) {
             const rollValues = getRollValues(candidate.stat, state.artifact.rarity);
-            for (const value of rollValues) {
+            for (let vi = 0; vi < rollValues.length; vi++) {
               const artifact = cloneArtifact(state.artifact);
               artifact.substats.push({
                 stat: candidate.stat,
-                value,
+                value: rollValues[vi]!,
                 active: true,
                 source: "SIMULATED"
               });
               artifact.level = milestone;
               nextStates.push({
                 artifact,
-                probability: state.probability * candidate.probability * (1 / rollValues.length),
+                probability: state.probability * candidate.probability * rollProbs[vi]!,
                 targetRolls: state.targetRolls
               });
             }
@@ -197,7 +198,7 @@ export function enumerateOutcomes(initial: ArtifactInput, targetStats: StatType[
             continue;
           }
           const rollValues = getRollValues(selected.stat, state.artifact.rarity);
-          for (const value of rollValues) {
+          for (let vi = 0; vi < rollValues.length; vi++) {
             const artifact = cloneArtifact(state.artifact);
             const activeIndexes = artifact.substats
               .map((substat, index) => ({ substat, index }))
@@ -209,12 +210,12 @@ export function enumerateOutcomes(initial: ArtifactInput, targetStats: StatType[
             }
             artifact.substats[sourceIndex] = {
               ...artifact.substats[sourceIndex],
-              value: round(artifact.substats[sourceIndex].value + value, 3)
+              value: round(artifact.substats[sourceIndex].value + rollValues[vi]!, 3)
             };
             artifact.level = milestone;
             nextStates.push({
               artifact,
-              probability: state.probability * (1 / active.length) * (1 / rollValues.length),
+              probability: state.probability * (1 / active.length) * rollProbs[vi]!,
               targetRolls: state.targetRolls + (targetStats.includes(selected.stat) ? 1 : 0)
             });
           }

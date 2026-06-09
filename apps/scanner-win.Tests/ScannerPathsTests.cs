@@ -18,10 +18,10 @@ public sealed class ScannerPathsTests
     [TestMethod]
     public void FindScreenshotFixture_ReturnsExamplePicturePath()
     {
-        string path = ScannerPaths.FindScreenshotFixture("GenshinImpact_lKJAl1Pymu.jpg");
+        string path = ScannerPaths.FindScreenshotFixture("character-detail-plus20.jpg");
 
         File.Exists(path).Should().BeTrue();
-        path.Should().EndWith(Path.Combine("data", "example", "picture", "GenshinImpact_lKJAl1Pymu.jpg"));
+        path.Should().EndWith(Path.Combine("data", "example", "picture", "character-detail-plus20.jpg"));
     }
 
     [TestMethod]

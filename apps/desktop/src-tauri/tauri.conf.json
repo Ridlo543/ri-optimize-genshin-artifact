@@ -84,13 +84,8 @@
     "icon": [
       "icons/icon.ico"
     ],
-    "externalBin": [
-      "binaries/GenshinArtifactScanner.Win"
-    ],
     "resources": [
-      "binaries/*.dll",
-      "binaries/*.json",
-      "binaries/tessdata"
+      "binaries/scanner-publish/**/*"
     ]
   }
 }

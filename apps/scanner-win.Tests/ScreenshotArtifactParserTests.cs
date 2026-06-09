@@ -17,6 +17,7 @@ public sealed class ScreenshotArtifactParserTests
 
         result.Error.Should().BeNull();
         result.Capture.Layout.Should().Be("bag-inventory-card");
+        result.Capture.Resolution.Should().Be("1920x1200");
         result.ScreenState.Should().NotBeNull();
         result.ScreenState!.Code.Should().Be(ScreenStateCodes.ArtifactBagDetail);
         result.ScreenState.ReadyForArtifactOcr.Should().BeTrue();
@@ -147,6 +148,72 @@ public sealed class ScreenshotArtifactParserTests
     private static string GetScreenshotPath(string fileName)
     {
         return GetRepoFilePath("data", "fixtures", "screenshots", fileName);
+    }
+
+    [TestMethod]
+    public void ParseFile_BagInventory1080p1_ReadsArtifact()
+    {
+        using OcrTextReader reader = new();
+        ArtifactOcrService service = new(reader);
+        ScreenshotArtifactParser parser = new(service);
+
+        ScanResult result = parser.ParseFile(GetScreenshotPath("bag-inventory-1920x1080-1.jpg"));
+
+        result.Capture.Resolution.Should().Be("1920x1080");
+        result.Capture.Layout.Should().Be("bag-inventory-card");
+        result.ScreenState.Should().NotBeNull();
+        result.ScreenState!.Code.Should().Be(ScreenStateCodes.ArtifactBagDetail);
+        result.Error.Should().BeNull();
+        result.Artifact.Should().NotBeNull();
+    }
+
+    [TestMethod]
+    public void ParseFile_BagInventory1080p2_ReadsArtifact()
+    {
+        using OcrTextReader reader = new();
+        ArtifactOcrService service = new(reader);
+        ScreenshotArtifactParser parser = new(service);
+
+        ScanResult result = parser.ParseFile(GetScreenshotPath("bag-inventory-1920x1080-2.jpg"));
+
+        result.Capture.Resolution.Should().Be("1920x1080");
+        result.Capture.Layout.Should().Be("bag-inventory-card");
+        result.ScreenState.Should().NotBeNull();
+        result.ScreenState!.Code.Should().Be(ScreenStateCodes.ArtifactBagDetail);
+        result.Error.Should().BeNull();
+        result.Artifact.Should().NotBeNull();
+    }
+
+    [TestMethod]
+    public void ParseFile_CharacterDetail1080p1_ReadsArtifact()
+    {
+        using OcrTextReader reader = new();
+        ArtifactOcrService service = new(reader);
+        ScreenshotArtifactParser parser = new(service);
+
+        ScanResult result = parser.ParseFile(GetScreenshotPath("character-detail-1920x1080-1.jpg"));
+
+        result.Capture.Resolution.Should().Be("1920x1080");
+        result.ScreenState.Should().NotBeNull();
+        result.ScreenState!.Code.Should().Be(ScreenStateCodes.CharacterArtifactDetail);
+        result.Error.Should().BeNull();
+        result.Artifact.Should().NotBeNull();
+    }
+
+    [TestMethod]
+    public void ParseFile_CharacterDetail1080p2_ReadsArtifact()
+    {
+        using OcrTextReader reader = new();
+        ArtifactOcrService service = new(reader);
+        ScreenshotArtifactParser parser = new(service);
+
+        ScanResult result = parser.ParseFile(GetScreenshotPath("character-detail-1920x1080-2.jpg"));
+
+        result.Capture.Resolution.Should().Be("1920x1080");
+        result.ScreenState.Should().NotBeNull();
+        result.ScreenState!.Code.Should().Be(ScreenStateCodes.CharacterArtifactDetail);
+        result.Error.Should().BeNull();
+        result.Artifact.Should().NotBeNull();
     }
 
     private static string GetRepoFilePath(params string[] relativeParts)

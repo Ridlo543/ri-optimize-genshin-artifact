@@ -4,6 +4,7 @@ import {
   applyLevelCorrection,
   applyScannerCorrection,
   getArtifactMainStatOptions,
+  getInitialScannerCorrections,
   getLevelCorrectionState,
   getScannerCorrectionState
 } from "./scannerCorrection";
@@ -150,5 +151,55 @@ describe("scanner level correction", () => {
 
     expect(corrected.artifact).toBeNull();
     expect(corrected.missingFields).toEqual(["slotKey", "mainStatKey"]);
+  });
+
+  it("seeds manual correction state from the current draft instead of stale previous values", () => {
+    const result: ScannerArtifactResult = {
+      ...missingLevelResult,
+      artifactDraft: {
+        setKey: "CelestialGift",
+        slotKey: "goblet",
+        rarity: 5,
+        level: 20,
+        mainStatKey: "atk_",
+        substats: [{ key: "critRate_", value: 10.5 }],
+        unactivatedSubstats: [],
+        lock: true,
+        location: "Prune"
+      },
+      missingFields: ["slotKey", "mainStatKey", "level"],
+      error: "Region OCR missing required fields: slotKey, mainStatKey, level."
+    };
+
+    expect(getInitialScannerCorrections(result)).toEqual({
+      level: 20,
+      slotKey: "goblet",
+      mainStatKey: "atk_"
+    });
+  });
+
+  it("clears invalid draft combinations when the saved main stat does not fit the draft slot", () => {
+    const result: ScannerArtifactResult = {
+      ...missingLevelResult,
+      artifactDraft: {
+        setKey: "CelestialGift",
+        slotKey: "flower",
+        rarity: 5,
+        level: 20,
+        mainStatKey: "atk_",
+        substats: [{ key: "critRate_", value: 10.5 }],
+        unactivatedSubstats: [],
+        lock: true,
+        location: "Prune"
+      },
+      missingFields: ["mainStatKey"],
+      error: "Region OCR missing required fields: mainStatKey."
+    };
+
+    expect(getInitialScannerCorrections(result)).toEqual({
+      level: 20,
+      slotKey: "flower",
+      mainStatKey: ""
+    });
   });
 });
